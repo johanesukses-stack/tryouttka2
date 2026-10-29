@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Halaman Guru — TRYOUT TKA MI HUSNAYAIN SLEMAN</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/guru.css">
+</head>
+<body>
+<div id="g-login" class="login-box">
+  <h2 style="margin:0 0 4px">Halaman Guru</h2>
+  <p class="sub" style="color:var(--muted);margin:0 0 12px;font-size:14px">TRYOUT TKA MI HUSNAYAIN SLEMAN</p>
+  <form id="g-form"><label class="f" for="pin">PIN guru</label>
+  <input class="inp" id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN" required>
+  <div id="g-msg" class="msg err" hidden></div><div style="height:14px"></div>
+  <button class="btn" type="submit">Masuk</button></form>
+  <p class="small" style="margin-top:14px"><a href="index.html">← Halaman siswa</a></p>
+</div>
+
+<div id="g-app" hidden>
+  <header class="g-head"><div class="g-wrap">
+    <div><h1 id="g-judul">—</h1><p id="g-sub">—</p></div>
+    <div style="display:flex;gap:8px"><button class="btn sm sec" id="g-ref">Muat ulang</button><button class="btn sm line" style="color:#fff;border-color:rgba(255,255,255,.5)" id="g-out">Keluar</button></div>
+  </div></header>
+  <div class="g-wrap">
+    <nav class="tabs" id="g-tabs">
+      <button data-t="pantau" class="on">Pemantauan</button><button data-t="rekap">Rekap Nilai</button><button data-t="analisis">Analisis Butir</button><button data-t="atur">Pengaturan</button>
+    </nav>
+    <section id="t-pantau"></section>
+    <section id="t-rekap" hidden></section>
+    <section id="t-analisis" hidden></section>
+    <section id="t-atur" hidden></section>
+  </div>
+</div>
+<div id="layer"></div>
+<script src="js/config.js"></script>
+<script src="js/guru.js"></script>
+</body>
+</html>

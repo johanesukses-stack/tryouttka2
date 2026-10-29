@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5a54">
+<meta name="robots" content="noindex,nofollow">
+<title>TRYOUT TKA MI HUSNAYAIN SLEMAN</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============ MASUK ============ -->
+<main id="s-login" class="screen">
+  <header class="hero"><div class="wrap">
+    <span class="eyebrow">Ujian Online</span>
+    <h1 data-judul>TRYOUT TKA MI HUSNAYAIN SLEMAN</h1>
+    <p data-sub>Memuat…</p>
+  </div></header>
+  <div class="wrap">
+    <form class="sheet" id="f-login" autocomplete="off">
+      <h2>Masuk</h2>
+      <p class="sub">Gunakan NISN dan password dari gurumu.</p>
+      <label class="f" for="nisn">NISN</label>
+      <input class="inp" id="nisn" inputmode="numeric" pattern="[0-9]*" maxlength="10" placeholder="10 angka" autocomplete="off" required>
+      <label class="f" for="pw">Password</label>
+      <div class="pw"><input class="inp" id="pw" type="password" placeholder="Password" autocomplete="off" autocapitalize="none" required><button type="button" id="pw-t">Lihat</button></div>
+      <div id="m-login" class="msg" hidden></div>
+      <div style="height:16px"></div>
+      <button class="btn" id="b-login" type="submit">Masuk</button>
+      <div class="chips"><span class="chip" data-durasi>90 menit</span><span class="chip">Sekali ikut</span><span class="chip">Bisa lewat HP</span></div>
+    </form>
+  </div>
+  <div class="foot">MI Husnayain Sleman</div>
+</main>
+
+<!-- ============ PETUNJUK ============ -->
+<main id="s-brief" class="screen" hidden>
+  <header class="hero"><div class="wrap">
+    <span class="eyebrow">Selamat datang</span>
+    <h1 id="br-nama">—</h1>
+    <p id="br-kelas">—</p>
+  </div></header>
+  <div class="wrap">
+    <section class="sheet">
+      <h2 data-judul>TRYOUT TKA MI HUSNAYAIN SLEMAN</h2>
+      <p class="sub" data-sub></p>
+      <div id="br-resume" class="msg info" hidden></div>
+      <ol class="rules">
+        <li><span class="n">1</span><span>Waktu <b data-durasi-txt>90 menit</b>. Waktu berjalan terus sejak tombol <b>Mulai</b> ditekan dan <b>tidak berhenti</b> walau kamu keluar.</span></li>
+        <li><span class="n">2</span><span>Ujian hanya bisa diikuti <b>satu kali</b>. Jawaban tersimpan otomatis. Jika HP mati atau macet, masuk lagi untuk melanjutkan.</span></li>
+        <li><span class="n">3</span><span>Ada tiga jenis soal: <b>pilih satu</b>, <b>centang semua yang benar</b>, dan <b>Benar/Salah</b> tiap pernyataan.</span></li>
+        <li><span class="n">4</span><span>Selama ujian, jangan membuka aplikasi atau tab lain. Setiap kali keluar dari layar ujian akan <b>dicatat dan dilihat guru</b>.</span></li>
+        <li><span class="n">5</span><span>Setelah semua terjawab, buka <b>Daftar</b> lalu ketuk <b>Kumpulkan Jawaban</b>.</span></li>
+      </ol>
+      <div class="box">
+        <h3>Cara keluar dari tampilan ujian</h3>
+        <ul>
+          <li><b>Sudah selesai:</b> ketuk <b>Kumpulkan Jawaban</b>. Setelah terkirim, layar ujian terbuka dan kamu bebas keluar.</li>
+          <li><b>Perlu keluar sebentar:</b> ketuk tombol <b>❓</b> di pojok kanan atas lalu pilih <b>Keluar sementara</b>. Waktu tetap berjalan.</li>
+        </ul>
+      </div>
+      <div style="height:16px"></div>
+      <button class="btn" id="b-mulai">Mulai Ujian</button>
+      <div style="height:10px"></div>
+      <button class="btn line" id="b-batal">Bukan saya / keluar</button>
+      <div id="m-brief" class="msg err" hidden></div>
+    </section>
+  </div>
+  <div class="foot">MI Husnayain Sleman</div>
+</main>
+
+<!-- ============ SUDAH MENGIKUTI ============ -->
+<main id="s-sudah" class="screen" hidden>
+  <header class="hero"><div class="wrap"><span class="eyebrow">Ujian hanya sekali</span><h1 id="sd-nama">—</h1><p id="sd-kelas"></p></div></header>
+  <div class="wrap"><section class="sheet center">
+    <h2>Kamu sudah mengikuti ujian ini</h2>
+    <p class="sub" id="sd-info"></p>
+    <p class="sub">Jika ada kendala, hubungi gurumu.</p>
+    <button class="btn line" id="b-sd">Kembali ke halaman masuk</button>
+  </section></div>
+</main>
+
+<!-- ============ SELESAI ============ -->
+<main id="s-done" class="screen" hidden>
+  <header class="hero"><div class="wrap"><span class="eyebrow">Jawaban terkirim ✓</span><h1 id="dn-nama">—</h1><p id="dn-kelas"></p></div></header>
+  <div class="wrap"><section class="sheet center">
+    <h2>Terima kasih, ujian selesai</h2>
+    <div id="dn-nilai-box" hidden><p class="sub" style="margin:8px 0 0">Nilai kamu</p><div class="score" id="dn-nilai">—</div></div>
+    <div class="kv" id="dn-kv"></div>
+    <a class="btn sec" id="dn-wa" target="_blank" rel="noopener" hidden>Kirim bukti ke WhatsApp guru</a>
+    <div style="height:10px"></div>
+    <button class="btn line" id="b-dn">Selesai</button>
+    <p class="sub" style="margin-top:14px">Jawabanmu sudah tersimpan di guru. Kamu boleh menutup halaman ini.</p>
+  </section></div>
+</main>
+
+<!-- ============ UJIAN ============ -->
+<section id="exam" hidden>
+  <div class="top">
+    <div class="t-left" id="x-no">Soal 1/30</div>
+    <div class="timer" id="x-timer">--:--</div>
+    <div class="t-right"><button class="ib" id="x-help" aria-label="Petunjuk dan cara keluar">❓</button><button class="ib" id="x-list" aria-label="Daftar soal">Daftar</button></div>
+  </div>
+  <div class="prog"><i id="x-prog"></i></div>
+  <div class="bar2"><span class="save"><i class="dot" id="x-dot"></i><span id="x-save">Tersimpan</span></span><span id="x-fs"></span><span id="x-count"></span></div>
+  <div class="main" id="x-main"></div>
+  <div class="bar">
+    <button id="x-prev">◀ Sebelum</button>
+    <button id="x-ragu" class="rg">Ragu-ragu</button>
+    <button id="x-next" class="nx">Lanjut ▶</button>
+  </div>
+</section>
+
+<div id="layer"></div>
+
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
