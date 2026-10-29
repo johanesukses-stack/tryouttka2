@@ -22,15 +22,17 @@
 <div id="g-app" hidden>
   <header class="g-head"><div class="g-wrap">
     <div><h1 id="g-judul">—</h1><p id="g-sub">—</p></div>
-    <div style="display:flex;gap:8px"><button class="btn sm sec" id="g-ref">Muat ulang</button><button class="btn sm line" style="color:#fff;border-color:rgba(255,255,255,.5)" id="g-out">Keluar</button></div>
+    <div style="display:flex;gap:8px;align-items:center"><select id="g-pk" title="Paket yang dilihat" style="padding:8px 10px;border-radius:10px;border:0;font-weight:700;max-width:190px"></select><button class="btn sm sec" id="g-ref">Muat ulang</button><button class="btn sm line" style="color:#fff;border-color:rgba(255,255,255,.5)" id="g-out">Keluar</button></div>
   </div></header>
   <div class="g-wrap">
     <nav class="tabs" id="g-tabs">
-      <button data-t="pantau" class="on">Pemantauan</button><button data-t="rekap">Rekap Nilai</button><button data-t="analisis">Analisis Butir</button><button data-t="atur">Pengaturan</button>
+      <button data-t="paket" class="on">Paket</button><button data-t="pantau">Pemantauan</button><button data-t="rekap">Rekap Nilai</button><button data-t="analisis">Analisis Butir</button><button data-t="riwayat">Riwayat Siswa</button><button data-t="atur">Pengaturan</button>
     </nav>
-    <section id="t-pantau"></section>
+    <section id="t-paket"></section>
+    <section id="t-pantau" hidden></section>
     <section id="t-rekap" hidden></section>
     <section id="t-analisis" hidden></section>
+    <section id="t-riwayat" hidden></section>
     <section id="t-atur" hidden></section>
   </div>
 </div>
