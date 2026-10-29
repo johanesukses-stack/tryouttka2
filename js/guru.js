@@ -10,7 +10,7 @@
   function hms(s) { var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ' j ' : '') + m + ' mnt'; }
   function num(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
 
-  var D = null, PIN = '', tab = 'pantau', auto = 0, urut = { k: 'nilai', d: -1 }, filterKelas = '';
+  var D = null, PIN = '', PK = '', tab = 'paket', auto = 0, urut = { k: 'nilai', d: -1 }, filterKelas = '';
 
   function api(action, data) {
     if (!C.API_URL) return Promise.reject(new Error('Alamat server belum diatur (js/config.js).'));
@@ -29,43 +29,45 @@
   $('#g-out').onclick = function () { try { sessionStorage.removeItem('g_pin'); } catch (x) {} location.reload(); };
   $('#g-ref').onclick = function () { muat().then(function () { toast('Data diperbarui'); }).catch(function (e) { toast(e.message); }); };
   $$('#g-tabs button').forEach(function (b) { b.onclick = function () { gantiTab(b.dataset.t); }; });
+  $('#g-pk').onchange = function () { PK = this.value; muat().catch(function (e) { toast(e.message); }); };
 
   function muat() {
-    return api('guru').then(function (r) {
+    return api('guru', { pk: PK }).then(function (r) {
       if (!r.ok) throw new Error(r.error || 'Gagal.');
-      D = r; $('#g-login').hidden = true; $('#g-app').hidden = false;
+      D = r; PK = r.pk || ''; $('#g-login').hidden = true; $('#g-app').hidden = false;
       $('#g-judul').textContent = r.pengaturan.judul;
-      $('#g-sub').textContent = [r.pengaturan.mapel, r.pengaturan.paket, 'KKM ' + r.pengaturan.kkm].filter(Boolean).join(' · ');
+      $('#g-sub').textContent = r.kosong ? 'Belum ada paket' : [r.pengaturan.pk, r.pengaturan.mapel, r.pengaturan.paket, 'KKM ' + r.pengaturan.kkm].filter(Boolean).join(' · ');
+      var sp = $('#g-pk'); sp.innerHTML = r.paket_list.map(function (p) { return '<option value="' + esc(p.pk) + '"' + (p.pk === PK ? ' selected' : '') + '>' + esc(p.pk) + (p.status === 'arsip' ? ' (arsip)' : '') + '</option>'; }).join('');
       document.title = 'Guru — ' + r.pengaturan.judul;
       render();
     });
   }
   function gantiTab(t) {
     tab = t; $$('#g-tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.t === t); });
-    ['pantau', 'rekap', 'analisis', 'atur'].forEach(function (x) { $('#t-' + x).hidden = x !== t; });
+    ['paket', 'pantau', 'rekap', 'analisis', 'riwayat', 'atur'].forEach(function (x) { $('#t-' + x).hidden = x !== t; });
     clearInterval(auto);
     if (t === 'pantau') auto = setInterval(function () { if (!document.hidden) muat().catch(function () {}); }, 20000);
     render();
   }
-  function render() { if (!D) return; ({ pantau: rPantau, rekap: rRekap, analisis: rAnalisis, atur: rAtur })[tab](); }
+  function render() { if (!D) return; ({ paket: rPaket, pantau: rPantau, rekap: rRekap, analisis: rAnalisis, riwayat: rRiwayat, atur: rAtur })[tab](); }
 
   /* ---------- pemantauan ---------- */
   function rPantau() {
     var s = D.siswa, b = s.filter(function (x) { return x.status === 'belum'; }).length, k = s.filter(function (x) { return x.status === 'berlangsung'; }).length, d = s.filter(function (x) { return x.status === 'selesai'; }).length;
     var h = '<div class="cards"><div class="stat"><b>' + s.length + '</b><span>Peserta</span></div><div class="stat"><b>' + b + '</b><span>Belum mulai</span></div><div class="stat"><b>' + k + '</b><span>Sedang mengerjakan</span></div><div class="stat"><b>' + d + '</b><span>Sudah selesai</span></div></div>';
-    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><span class="small">Diperbarui otomatis tiap 20 detik di tab ini. Status ujian: <b>' + (D.pengaturan.status_ujian === 'buka' ? 'DIBUKA' : 'DITUTUP') + '</b></span></div>';
+    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><span class="small">Diperbarui otomatis tiap 20 detik di tab ini. Paket <b>' + esc(PK) + '</b>: <b>' + (KEADAAN[D.pengaturan.keadaan] || '') + '</b></span></div>';
     h += '<div class="tw"><table class="t"><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Status</th><th class="n">Terisi</th><th class="n">Sisa waktu</th><th class="n">Keluar layar</th><th class="n">Nilai</th><th class="noprint"></th></tr>';
     s.filter(function (x) { return !filterKelas || x.kelas === filterKelas; }).forEach(function (x, i) {
       var tg = x.status === 'selesai' ? '<span class="tag ok">Selesai</span>' : x.status === 'berlangsung' ? '<span class="tag w">Mengerjakan</span>' : '<span class="tag">Belum</span>';
       h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + tg + '</td><td class="n">' + (x.status === 'belum' ? '' : x.terisi + '/' + D.soal.length) + '</td><td class="n">' + (x.sisa_detik != null ? hms(x.sisa_detik) : '') + '</td><td class="n">' + (x.keluar ? '<span class="tag ' + (x.keluar >= 3 ? 'b' : 'w') + '">' + x.keluar + '×</span>' : '') + '</td><td class="n">' + (x.nilai != null ? '<b>' + num(x.nilai) + '</b>' : '') + '</td><td class="noprint">' + (x.status !== 'belum' ? '<button class="btn sm line" data-reset="' + x.nisn + '">Reset</button>' : '') + '</td></tr>';
     });
-    $('#t-pantau').innerHTML = h + '</table></div><p class="small">Reset = hapus hasil dan izinkan siswa mengulang (mis. HP rusak sebelum terkirim, atau salah orang).</p>';
+    $('#t-pantau').innerHTML = h + '</table></div><p class="small">Reset = hapus hasil <b>paket ini saja</b> dan izinkan siswa mengulang (paket lain tidak terpengaruh; mis. HP rusak sebelum terkirim, atau salah orang).</p>';
     $('#f-kelas').onchange = function () { filterKelas = this.value; rPantau(); };
     $$('[data-reset]', $('#t-pantau')).forEach(function (b) {
       b.onclick = function () {
         var s0 = D.siswa.filter(function (x) { return x.nisn === b.dataset.reset; })[0];
         if (!confirm('Reset ujian ' + s0.nama + '? Jawaban dan nilai siswa ini dihapus, dan ia dapat mengulang dari awal.')) return;
-        api('guru_reset', { nisn: s0.nisn }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat(); }).then(function () { toast('Direset: ' + s0.nama); }).catch(function (e) { toast(e.message); });
+        api('guru_reset', { nisn: s0.nisn, pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat(); }).then(function () { toast('Direset: ' + s0.nama); }).catch(function (e) { toast(e.message); });
       };
     });
   }
@@ -81,7 +83,7 @@
     var done = rows.filter(function (x) { return x.nilai != null; }), nil = done.map(function (x) { return x.nilai; });
     var avg = nil.length ? nil.reduce(function (a, b) { return a + b; }, 0) / nil.length : 0;
     var h = '<div class="cards"><div class="stat"><b>' + done.length + '/' + rows.length + '</b><span>Sudah selesai</span></div><div class="stat"><b>' + (nil.length ? num(avg) : '-') + '</b><span>Rata-rata</span></div><div class="stat"><b>' + (nil.length ? num(Math.max.apply(null, nil)) : '-') + '</b><span>Tertinggi</span></div><div class="stat"><b>' + (nil.length ? num(Math.min.apply(null, nil)) : '-') + '</b><span>Terendah</span></div><div class="stat"><b>' + nil.filter(function (v) { return v >= kkm; }).length + '</b><span>Tuntas (≥ ' + kkm + ')</span></div></div>';
-    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv">Unduh CSV (Excel)</button><button class="btn sm sec" id="b-print">Cetak</button><button class="btn sm line" id="b-sheet">Perbarui sheet di Google Sheet</button></div>';
+    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv">Unduh CSV (Excel)</button><button class="btn sm sec" id="b-print">Cetak</button><button class="btn sm line" id="b-sheet">Perbarui sheet paket ini</button></div>';
     var arr = rows.map(function (x) { var r = hm[x.nisn]; return { x: x, r: r, nilai: x.nilai == null ? -1 : x.nilai }; });
     arr.sort(function (a, b) { var k = urut.k; var va = k === 'nama' ? a.x.nama : k === 'kelas' ? a.x.kelas + a.x.nama : a.nilai, vb = k === 'nama' ? b.x.nama : k === 'kelas' ? b.x.kelas + b.x.nama : b.nilai; return (va > vb ? 1 : va < vb ? -1 : 0) * urut.d; });
     h += '<div class="tw"><table class="t"><tr><th>No</th><th class="s" data-s="nama">Nama</th><th class="s" data-s="kelas">Kelas</th><th>NISN</th><th class="s n" data-s="nilai">Nilai ▾</th><th class="n">Durasi</th><th class="n">Keluar</th><th>Kode</th><th>Ket.</th></tr>';
@@ -94,7 +96,7 @@
     $$('th.s', $('#t-rekap')).forEach(function (th) { th.onclick = function () { urut = { k: th.dataset.s, d: urut.k === th.dataset.s ? -urut.d : (th.dataset.s === 'nilai' ? -1 : 1) }; rRekap(); }; });
     $('#b-print').onclick = function () { window.print(); };
     $('#b-csv').onclick = function () { unduhCSV(arr); };
-    $('#b-sheet').onclick = function () { api('guru_tulis_sheet').then(function (r) { toast(r.ok ? 'Sheet "Rekap Nilai" & "Analisis Butir" diperbarui' : r.error); }).catch(function (e) { toast(e.message); }); };
+    $('#b-sheet').onclick = function () { api('guru_tulis_sheet', { pk: PK }).then(function (r) { toast(r.ok ? 'Sheet "Rekap ' + PK + '" & "Analisis ' + PK + '" diperbarui' : r.error); }).catch(function (e) { toast(e.message); }); };
   }
   function unduhCSV(arr) {
     var head = ['No', 'Nama', 'Kelas', 'NISN', 'Status', 'Nilai', 'Durasi_menit', 'Keluar_layar', 'Kode'].concat(D.soal.map(function (q) { return 'S' + q.no; }));
@@ -102,7 +104,7 @@
     arr.forEach(function (o, i) { var x = o.x, r = o.r; L.push([i + 1, x.nama, x.kelas, "'" + x.nisn, x.status, x.nilai == null ? '' : x.nilai, r ? r.durasi_menit : '', r ? r.keluar : '', r ? r.kode : ''].concat(D.soal.map(function (q) { return r ? (r.skor[q.no] != null ? r.skor[q.no] : 0) : ''; }))); });
     var csv = '﻿' + L.map(function (r) { return r.map(function (v) { v = String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\r\n');
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    var d = new Date(); a.download = 'rekap-nilai-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+    var d = new Date(); a.download = 'rekap-' + PK.toLowerCase() + '-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.csv'; document.body.appendChild(a); a.click(); a.remove();
   }
 
   /* ---------- analisis butir ---------- */
@@ -136,17 +138,94 @@
 
   /* ---------- pengaturan ---------- */
   function rAtur() {
-    var buka = D.pengaturan.status_ujian === 'buka';
-    var h = '<div class="stat" style="margin-bottom:12px"><b>' + (buka ? 'Ujian DIBUKA' : 'Ujian DITUTUP') + '</b><span>' + (buka ? 'Siswa dapat masuk dan memulai.' : 'Siswa baru tidak bisa mulai. Yang sedang mengerjakan tetap bisa melanjutkan.') + '</span><div style="height:10px"></div><button class="btn sm ' + (buka ? 'warn' : '') + '" id="a-toggle">' + (buka ? 'Tutup ujian' : 'Buka ujian') + '</button></div>';
-    h += '<div class="stat" style="margin-bottom:12px"><b>Hitung ulang nilai</b><span>Pakai bila kunci jawaban di sheet "Soal" diperbaiki setelah ada siswa yang selesai. Nilai semua siswa dihitung ulang dari jawaban tersimpan.</span><div style="height:10px"></div><button class="btn sm sec" id="a-hitung">Hitung ulang semua nilai</button></div>';
-    h += '<div class="stat"><b>Mengubah soal, siswa, durasi, PIN</b><span>Semua diatur di Google Sheet: sheet <b>Pengaturan</b>, <b>Siswa</b>, <b>Soal</b>. Gambar soal diunggah ke folder <code>gambar/</code> di GitHub. Lihat README.</span></div>';
+    var h = '<div class="stat" style="margin-bottom:12px"><b>Paket ' + esc(PK) + '</b><span>Membuka, menutup, jadwal, dan mengubah paket ada di tab <b>Paket</b>.</span></div>';
+    h += '<div class="stat" style="margin-bottom:12px"><b>Hitung ulang nilai paket ' + esc(PK) + '</b><span>Pakai bila kunci jawaban paket ini di sheet "Soal" diperbaiki setelah ada siswa yang selesai. Hanya paket ini yang dihitung ulang.</span><div style="height:10px"></div><button class="btn sm sec" id="a-hitung">Hitung ulang nilai paket ini</button></div>';
+    h += '<div class="stat"><b>Soal, siswa, PIN, KKM umum</b><span>Diatur di Google Sheet: sheet <b>Soal</b> (kolom <code>paket</code> = kode paket), <b>Siswa</b>, <b>Pengaturan</b>. Gambar soal diunggah ke folder <code>gambar/</code> di GitHub. Lihat README.</span></div>';
     $('#t-atur').innerHTML = h;
-    $('#a-toggle').onclick = function () { api('guru_status', { status: buka ? 'tutup' : 'buka' }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat(); }).then(function () { toast('Status ujian diubah'); }).catch(function (e) { toast(e.message); }); };
-    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa dengan kunci saat ini?')) return; api('guru_hitung_ulang').then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
+    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa pada paket ' + PK + ' dengan kunci saat ini?')) return; api('guru_hitung_ulang', { pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
+  }
+
+  /* ---------- paket ---------- */
+  var KEADAAN = { buka: 'DIBUKA', terjadwal: 'TERJADWAL', tutup: 'DITUTUP', draf: 'DRAF', arsip: 'ARSIP' };
+  var MAPEL = [['MTK', 'Matematika'], ['BIN', 'Bahasa Indonesia'], ['IPAS', 'IPAS']];
+  function tagKeadaan(k) { return '<span class="tag ' + (k === 'buka' ? 'ok' : k === 'terjadwal' ? 'w' : k === 'tutup' ? 'b' : '') + '">' + (KEADAAN[k] || k) + '</span>'; }
+  function dtl(v) { return String(v || '').replace(' ', 'T'); }
+
+  function rPaket() {
+    var L = D.paket_list, h = '<div class="row"><button class="btn sm" id="p-baru">+ Paket baru</button><span class="small">Soal diisi di Google Sheet "Soal" (kolom <code>paket</code> = kode). Siswa langsung masuk ke paket yang dibuka untuk kelasnya.</span></div><div id="p-form"></div>';
+    if (!L.length) h += '<div class="msg info">Belum ada paket. Ketuk "+ Paket baru".</div>';
+    else {
+      h += '<div class="tw"><table class="t"><tr><th>Kode</th><th>Paket</th><th>Status</th><th>Jadwal</th><th>Kelas</th><th class="n">Soal</th><th class="n">Selesai</th><th class="n">Rata²</th><th class="noprint"></th></tr>';
+      L.forEach(function (p) {
+        var jad = p.jadwal_buka || p.jadwal_tutup ? esc(p.jadwal_buka || '…') + '<br>s.d. ' + esc(p.jadwal_tutup || '…') + (p.kontrol === 'jadwal' ? '' : '<br><span class="small">(manual)</span>') : '<span class="small">—</span>';
+        var warn = p.n_soal ? (p.masalah.length ? '<br><span class="tag b" title="' + esc(p.masalah.join(' ')) + '">' + p.masalah.length + ' masalah soal</span>' : '') : '<br><span class="tag w">belum ada soal</span>';
+        h += '<tr' + (p.pk === PK ? ' style="background:var(--brand-l)"' : '') + '><td><b>' + esc(p.pk) + '</b></td><td>' + esc(p.mapel) + '<br><span class="small">' + esc(p.nama) + ' · ' + p.durasi_menit + ' mnt</span></td><td>' + tagKeadaan(p.keadaan) + (p.n_jalan ? '<br><span class="small">' + p.n_jalan + ' mengerjakan</span>' : '') + '</td><td class="small">' + jad + '</td><td>' + (esc(p.kelas) || 'Semua') + '</td><td class="n">' + p.n_soal + warn + '</td><td class="n">' + p.n_selesai + '/' + p.n_peserta + '</td><td class="n">' + (p.rata == null ? '' : num(p.rata)) + '</td><td class="noprint" style="white-space:nowrap">' +
+          '<button class="btn sm line" data-lihat="' + esc(p.pk) + '">Lihat</button> ' +
+          (p.keadaan === 'buka' ? '<button class="btn sm warn" data-cmd="tutup" data-pk="' + esc(p.pk) + '">Tutup</button> ' : '<button class="btn sm" data-cmd="buka" data-pk="' + esc(p.pk) + '">Buka sekarang</button> ') +
+          ((p.jadwal_buka || p.jadwal_tutup) && !(p.status === 'aktif' && p.kontrol === 'jadwal') ? '<button class="btn sm sec" data-cmd="jadwal" data-pk="' + esc(p.pk) + '">Ikuti jadwal</button> ' : '') +
+          '<button class="btn sm line" data-edit="' + esc(p.pk) + '">Ubah</button> ' +
+          (p.status === 'arsip' ? '<button class="btn sm line" data-cmd="draf" data-pk="' + esc(p.pk) + '">Keluarkan dari arsip</button>' : '<button class="btn sm line" data-cmd="arsip" data-pk="' + esc(p.pk) + '">Arsipkan</button>') + '</td></tr>';
+      });
+      h += '</table></div><p class="small">Buka sekarang = terbuka sampai kamu tutup. Ikuti jadwal = otomatis terbuka dan tertutup sesuai jam yang diisi. Siswa yang sedang mengerjakan tetap bisa melanjutkan setelah paket ditutup. Draf dan arsip tidak tampil bagi siswa; nilainya tetap tersimpan.</p>';
+    }
+    var el = $('#t-paket'); el.innerHTML = h;
+    $('#p-baru').onclick = function () { formPaket(null); };
+    $$('[data-lihat]', el).forEach(function (b) { b.onclick = function () { PK = b.dataset.lihat; muat().then(function () { gantiTab('pantau'); }).catch(function (e) { toast(e.message); }); }; });
+    $$('[data-edit]', el).forEach(function (b) { b.onclick = function () { formPaket(L.filter(function (p) { return p.pk === b.dataset.edit; })[0]); }; });
+    $$('[data-cmd]', el).forEach(function (b) {
+      b.onclick = function () {
+        var c = b.dataset.cmd, pk = b.dataset.pk;
+        if ((c === 'tutup' || c === 'arsip') && !confirm((c === 'tutup' ? 'Tutup paket ' : 'Arsipkan paket ') + pk + '? Siswa yang sedang mengerjakan tetap bisa melanjutkan.')) return;
+        api('guru_paket_cmd', { pk: pk, perintah: c }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat(); }).then(function () { toast('Paket ' + pk + ' diperbarui'); }).catch(function (e) { toast(e.message); });
+      };
+    });
+  }
+
+  function formPaket(p) {
+    var baru = !p, sel = MAPEL.map(function (m) { return '<option value="' + m[0] + '|' + m[1] + '"' + (p && p.mapel === m[1] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('');
+    var h = '<div class="stat" style="margin:10px 0 14px"><b>' + (baru ? 'Paket baru' : 'Ubah ' + esc(p.pk)) + '</b><div class="fg">' +
+      (baru ? '<label>Mata pelajaran<select id="pf-mapel">' + sel + '</select></label><label>Nomor paket<input id="pf-no" type="number" min="1" value="1"></label><label>Kode paket<input id="pf-kode" maxlength="20"></label>'
+            : '<label>Mata pelajaran<input id="pf-mapel-t" value="' + esc(p.mapel) + '"></label>') +
+      '<label>Nama paket<input id="pf-nama" value="' + esc(p ? p.nama : '') + '"></label>' +
+      '<label>Durasi (menit)<input id="pf-dur" type="number" min="5" value="' + (p ? p.durasi_menit : 90) + '"></label>' +
+      '<label>Jadwal buka (WIB)<input id="pf-buka" type="datetime-local" value="' + dtl(p && p.jadwal_buka) + '"></label>' +
+      '<label>Jadwal tutup (WIB)<input id="pf-tutup" type="datetime-local" value="' + dtl(p && p.jadwal_tutup) + '"></label>' +
+      '<label>Kelas peserta (kosong = semua)<input id="pf-kelas" placeholder="6A, 6B" value="' + esc(p ? p.kelas : '') + '"></label>' +
+      '<label>KKM paket (kosong = umum)<input id="pf-kkm" type="number" value="' + (p ? p.kkm_paket : '') + '"></label></div>' +
+      '<div style="height:10px"></div><button class="btn sm" id="pf-simpan">Simpan</button> <button class="btn sm line" id="pf-batal">Batal</button></div>';
+    var f = $('#p-form'); f.innerHTML = h;
+    function kodeOtomatis() { if (!baru) return; var m = $('#pf-mapel').value.split('|'), n = Math.max(1, +$('#pf-no').value || 1); $('#pf-kode').value = m[0] + '-P' + (n < 10 ? '0' : '') + n; $('#pf-nama').placeholder = 'Tryout TKA ' + m[1] + ' Paket ' + n; }
+    if (baru) { $('#pf-mapel').onchange = kodeOtomatis; $('#pf-no').oninput = kodeOtomatis; kodeOtomatis(); }
+    $('#pf-batal').onclick = function () { f.innerHTML = ''; };
+    $('#pf-simpan').onclick = function () {
+      var mapel = baru ? $('#pf-mapel').value.split('|')[1] : $('#pf-mapel-t').value.trim(), kode = baru ? $('#pf-kode').value.trim() : p.pk;
+      var d = { kode: kode, mapel: mapel, nama: $('#pf-nama').value.trim() || $('#pf-nama').placeholder || kode, durasi_menit: +$('#pf-dur').value || 90, jadwal_buka: $('#pf-buka').value.replace('T', ' '), jadwal_tutup: $('#pf-tutup').value.replace('T', ' '), kelas: $('#pf-kelas').value.trim(), kkm: $('#pf-kkm').value };
+      api('guru_paket_simpan', { baru: baru, data: d }).then(function (r) { if (!r.ok) throw new Error(r.error); PK = r.pk; return muat(); }).then(function () { toast('Paket disimpan'); }).catch(function (e) { toast(e.message); });
+    };
+  }
+
+  /* ---------- riwayat siswa (semua paket) ---------- */
+  function rRiwayat() {
+    var R = D.riwayat, rows = R.siswa.filter(function (x) { return !filterKelas || x.kelas === filterKelas; });
+    var h = '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv-r">Unduh CSV (Excel)</button><span class="small">Nilai tiap siswa di semua paket yang bukan draf. Nilai paket lama tetap tersimpan.</span></div>';
+    if (!R.paket.length) { $('#t-riwayat').innerHTML = h + '<div class="msg info">Belum ada paket yang aktif.</div>'; return; }
+    h += '<div class="tw"><table class="t"><tr><th>No</th><th>Nama</th><th>Kelas</th>' + R.paket.map(function (k) { return '<th class="n">' + esc(k) + '</th>'; }).join('') + '<th class="n">Rata²</th></tr>';
+    rows.forEach(function (x, i) {
+      var v = R.paket.map(function (k) { return x.nilai[k]; }).filter(function (n) { return n != null; });
+      h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td>' + R.paket.map(function (k) { var n = x.nilai[k]; return '<td class="n">' + (n == null ? '<span class="small">—</span>' : '<b>' + num(n) + '</b>') + '</td>'; }).join('') + '<td class="n">' + (v.length ? num(v.reduce(function (a, b) { return a + b; }, 0) / v.length) : '') + '</td></tr>';
+    });
+    $('#t-riwayat').innerHTML = h + '</table></div>';
+    $('#f-kelas').onchange = function () { filterKelas = this.value; rRiwayat(); };
+    $('#b-csv-r').onclick = function () {
+      var L = [['No', 'Nama', 'Kelas', 'NISN'].concat(R.paket)];
+      rows.forEach(function (x, i) { L.push([i + 1, x.nama, x.kelas, "'" + x.nisn].concat(R.paket.map(function (k) { return x.nilai[k] == null ? '' : x.nilai[k]; }))); });
+      var csv = '\ufeff' + L.map(function (r) { return r.map(function (v) { v = String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\r\n');
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'riwayat-nilai.csv'; document.body.appendChild(a); a.click(); a.remove();
+    };
   }
 
   /* ---------- awal ---------- */
-  try { var p = sessionStorage.getItem('g_pin'); if (p) { PIN = p; muat().then(function () { gantiTab('pantau'); }).catch(function () { PIN = ''; }); } } catch (e) {}
+  try { var p = sessionStorage.getItem('g_pin'); if (p) { PIN = p; muat().then(function () { gantiTab('paket'); }).catch(function () { PIN = ''; }); } } catch (e) {}
   var prevMuat = muat; // setelah login pertama aktifkan auto-refresh
   $('#g-form').addEventListener('submit', function () { setTimeout(function () { if (D) gantiTab(tab); }, 1200); });
 })();
