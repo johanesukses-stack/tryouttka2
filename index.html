@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b5a54">
-<meta name="color-scheme" content="light only">
 <meta name="robots" content="noindex,nofollow">
 <title>TRYOUT TKA MI HUSNAYAIN SLEMAN</title>
 <link rel="stylesheet" href="css/style.css">
@@ -17,6 +16,11 @@
     <span class="eyebrow">Ujian Online</span>
     <h1 data-judul>TRYOUT TKA MI HUSNAYAIN SLEMAN</h1>
     <p data-sub>Memuat…</p>
+    <div class="paketinfo" hidden>
+      <div class="pi-h">Paket soal yang tersedia</div>
+      <ol id="info-paket"></ol>
+      <div class="pi-f">Setelah masuk, kamu memilih satu paket untuk dikerjakan.</div>
+    </div>
   </div></header>
   <div class="wrap">
     <form class="sheet" id="f-login" autocomplete="off">
@@ -80,8 +84,8 @@
   </div></header>
   <div class="wrap">
     <section class="sheet">
-      <h2>Pilih ujian</h2>
-      <p class="sub">Ujian yang dibuka untuk kelasmu. Tiap paket hanya bisa diikuti satu kali.</p>
+      <h2>Pilih paket soal</h2>
+      <p class="sub"><b id="pl-count"></b> untuk kelasmu. <b>Ketuk salah satu paket</b> untuk memulai. Tiap paket hanya bisa diikuti satu kali.</p>
       <div id="pl-list"></div>
       <div style="height:6px"></div>
       <button class="btn line" id="b-pl-batal">Bukan saya / keluar</button>
