@@ -7,7 +7,7 @@
 
   /* ---------- util ---------- */
   function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function fmt(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); }
+  function fmt(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\{(\d+)\/(\d+)\}/g, '<span class="frac"><span class="n">$1</span><span class="d">$2</span></span>').replace(/\n/g, '<br>'); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function hms(sec) { var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s); }
   function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
@@ -443,4 +443,3 @@
   api('info', {}, 15000).then(function (i) { if (i.ok) infoAwal(i); else applyInfo({}); })
     .catch(function (e) { applyInfo({}); msg($('#m-login'), e.message, 'err'); });
 })();
-
