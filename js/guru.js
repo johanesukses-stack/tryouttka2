@@ -5,7 +5,7 @@
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
   function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function fmt(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); }
+  function fmt(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\{(\d+)\/(\d+)\}/g, '<span class="frac"><span class="n">$1</span><span class="d">$2</span></span>').replace(/\n/g, '<br>'); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function hms(s) { var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ' j ' : '') + m + ' mnt'; }
   function num(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
