@@ -78,13 +78,34 @@
   /* ---------- pilih paket ---------- */
   function labelState(p) { return p.state === 'berlangsung' ? 'Sedang berjalan · lanjutkan' : p.state === 'selesai' ? 'Sudah dikerjakan' : p.state === 'terjadwal' ? 'Dibuka ' + (p.buka || 'nanti') : 'Belum dikerjakan'; }
 
+  function badgeState(p) {
+    if (p.state === 'berlangsung') return ['lanjut', 'Lanjutkan'];
+    if (p.state === 'selesai') return ['selesai', 'Sudah selesai'];
+    if (p.state === 'terjadwal') return ['jadwal', 'Dibuka ' + (p.buka || 'nanti')];
+    return ['baru', 'Belum dikerjakan'];
+  }
+
   function tampilPilih() {
     $('#pl-nama').textContent = S.nama; $('#pl-kelas').textContent = 'Kelas ' + S.kelas + ' · NISN ' + S.nisn;
     var box = $('#pl-list'); box.innerHTML = '';
-    S.paketList.forEach(function (p) {
-      var b = document.createElement('button'); b.className = 'opt'; b.disabled = p.state === 'terjadwal';
-      b.innerHTML = '<span class="m">' + esc((p.mapel || p.pk).slice(0, 3).toUpperCase()) + '</span><span class="tx"><b>' + esc(p.nama) + '</b><br><span style="color:var(--muted);font-size:13px">' + esc(p.mapel) + ' · ' + p.durasi_menit + ' menit · ' + esc(labelState(p)) + '</span></span>';
-      b.onclick = function () { pilihPaket(p); };
+    $('#pl-count').textContent = S.paketList.length + ' paket soal tersedia';
+    S.paketList.forEach(function (p, n) {
+      var bs = badgeState(p);
+      var b = document.createElement('button'); b.type = 'button';
+      b.className = 'pk pk-' + bs[0]; b.disabled = p.state === 'terjadwal' || p.state === 'selesai';
+      b.innerHTML = '<span class="pk-no">' + (n + 1) + '</span>'
+        + '<span class="pk-tx"><b>' + esc(p.nama || p.pk) + '</b>'
+        + '<span class="pk-meta">' + esc(p.mapel || '') + ' · ' + p.durasi_menit + ' menit</span>'
+        + '<span class="pk-st">' + esc(bs[1]) + '</span></span>'
+        + '<span class="pk-go" aria-hidden="true">' + (b.disabled ? '' : '›') + '</span>';
+      b.onclick = function () {
+        if (b.disabled) return;
+        $$('.pk', box).forEach(function (x) { x.disabled = true; if (x !== b) x.classList.add('dim'); });
+        b.classList.add('picked');
+        b.querySelector('.pk-go').innerHTML = '<i class="pk-spin"></i>';
+        b.querySelector('.pk-st').textContent = 'Membuka paket…';
+        setTimeout(function () { pilihPaket(p); }, 280);
+      };
       box.appendChild(b);
     });
     msg($('#m-pilih'), '');
@@ -98,12 +119,12 @@
     if (p.state === 'selesai') return tampilSudah(p.selesai);
     var m = $('#s-pilih').hidden ? $('#m-login') : $('#m-pilih');
     api('masuk', { nisn: S.nisn, tiket: S.tiket, pk: p.pk, perangkat: navigator.userAgent }).then(function (r) {
-      if (!r.ok) { if (r.ulang) { S.tiket = ''; show('s-login'); m = $('#m-login'); } return msg(m, r.error || 'Gagal masuk.'); }
+      if (!r.ok) { if (r.ulang) { S.tiket = ''; show('s-login'); m = $('#m-login'); } else if (!$('#s-pilih').hidden) tampilPilih(); return msg(m, r.error || 'Gagal masuk.'); }
       S.token = r.token || '';
       applyInfo({ judul: r.judul, mapel: r.mapel, paket: r.paket, durasi_menit: r.durasi_menit });
       if (r.state === 'selesai') return tampilSudah(r.selesai);
       initBrief(r);
-    }).catch(function (e) { msg(m, e.message); });
+    }).catch(function (e) { if (!$('#s-pilih').hidden) tampilPilih(); msg(m, e.message); });
   }
 
   function tampilSudah(waktu) {
@@ -431,12 +452,22 @@
   $('#b-sd').onclick = function () { if (S.paketList.length > 1 && S.tiket) { S.paketList.forEach(function (p) { if (p.pk === S.pk && p.state !== 'selesai') p.state = 'selesai'; }); tampilPilih(); } else { show('s-login'); } };
   initLogin();
   function infoAwal(i) {
-    var d = i.paket || [], sub, dur = 90;
-    if (d.length === 1) { sub = [d[0].mapel, d[0].nama].filter(Boolean).join(' · '); dur = d[0].durasi_menit; }
-    else if (d.length > 1) sub = d.length + ' ujian dibuka: ' + d.map(function (p) { return p.mapel || p.pk; }).join(', ');
-    else sub = 'Ujian online';
+    var d = i.paket || [], dur = 90;
+    if (d.length === 1) dur = d[0].durasi_menit;
+    var sub = !d.length ? 'Ujian online' : d.length === 1 ? 'Tersedia 1 paket soal' : 'Tersedia ' + d.length + ' paket soal';
     applyInfo({ judul: i.judul, mapel: '', paket: '', durasi_menit: dur });
     $$('[data-sub]').forEach(function (e) { e.textContent = sub; });
+    var box = $('#info-paket');
+    if (box) {
+      box.innerHTML = '';
+      d.forEach(function (p, n) {
+        var li = document.createElement('li');
+        var jd = p.keadaan === 'terjadwal' ? ' <em>(belum dibuka)</em>' : '';
+        li.innerHTML = '<span class="no">' + (n + 1) + '</span><span><b>' + esc(p.nama || p.pk) + '</b>' + jd + '<br><small>' + esc(p.mapel || '') + ' · ' + p.durasi_menit + ' menit</small></span>';
+        box.appendChild(li);
+      });
+      box.parentNode.hidden = !d.length;
+    }
     if (!d.length) msg($('#m-login'), 'Belum ada ujian yang dibuka. Hubungi guru.', 'info');
     else if (d.every(function (p) { return p.keadaan === 'terjadwal'; })) msg($('#m-login'), 'Ujian belum dimulai sesuai jadwal.', 'info');
   }
