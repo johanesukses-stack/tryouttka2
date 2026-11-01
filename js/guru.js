@@ -97,7 +97,7 @@
     var done = rows.filter(function (x) { return x.nilai != null; }), nil = done.map(function (x) { return x.nilai; });
     var avg = nil.length ? nil.reduce(function (a, b) { return a + b; }, 0) / nil.length : 0;
     var h = '<div class="cards"><div class="stat"><b>' + done.length + '/' + rows.length + '</b><span>Sudah selesai</span></div><div class="stat"><b>' + (nil.length ? num(avg) : '-') + '</b><span>Rata-rata</span></div><div class="stat"><b>' + (nil.length ? num(Math.max.apply(null, nil)) : '-') + '</b><span>Tertinggi</span></div><div class="stat"><b>' + (nil.length ? num(Math.min.apply(null, nil)) : '-') + '</b><span>Terendah</span></div><div class="stat"><b>' + nil.filter(function (v) { return v >= kkm; }).length + '</b><span>Tuntas (≥ ' + kkm + ')</span></div></div>';
-    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv">Unduh CSV (Excel)</button><button class="btn sm sec" id="b-print">Cetak</button><button class="btn sm line" id="b-sheet">Perbarui sheet paket ini</button></div>';
+    h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv">Unduh Excel</button><button class="btn sm sec" id="b-print">Cetak</button><button class="btn sm line" id="b-sheet">Perbarui sheet paket ini</button></div>';
     h += '<div class="row noprint"><b style="font-size:14px">PDF jawaban siswa:</b><select id="f-mode"><option value="lengkap"' + (modePDF === 'lengkap' ? ' selected' : '') + '>Lengkap (soal + gambar + pembahasan)</option><option value="ringkas"' + (modePDF === 'ringkas' ? ' selected' : '') + '>Ringkas (tabel jawaban &amp; kunci)</option></select><button class="btn sm" id="b-pdfall">Unduh PDF semua siswa' + (filterKelas ? ' kelas ' + esc(filterKelas) : '') + '</button></div><div class="row noprint"><b style="font-size:14px">Peta belajar (insight per anak):</b><button class="btn sm sec" id="b-petaall">Unduh Peta Belajar semua siswa' + (filterKelas ? ' kelas ' + esc(filterKelas) : '') + ' (PDF)</button></div><p class="small noprint" style="margin-top:-4px">Peta Belajar: materi yang sudah dikuasai dan yang perlu diperkuat, plus panduan untuk guru, orang tua, dan siswa. Satu siswa = 1-2 halaman. Tombol "Peta" ada di tiap baris. Isi jawaban yang dipilih siswa, kunci yang benar, dan skor tiap soal. Untuk satu siswa, pakai tombol PDF di barisnya. Mode Lengkap + semua siswa menghasilkan file besar; pilih Ringkas bila ingin cepat.</p>';
     var arr = rows.map(function (x) { var r = hm[x.nisn]; return { x: x, r: r, nilai: x.nilai == null ? -1 : x.nilai }; });
     arr.sort(function (a, b) { var k = urut.k; var va = k === 'nama' ? a.x.nama : k === 'kelas' ? a.x.kelas + a.x.nama : a.nilai, vb = k === 'nama' ? b.x.nama : k === 'kelas' ? b.x.kelas + b.x.nama : b.nilai; return (va > vb ? 1 : va < vb ? -1 : 0) * urut.d; });
@@ -133,7 +133,7 @@
       var nm = 'hasil-' + PK.toLowerCase() + '-' + (filterKelas ? filterKelas.toLowerCase() : 'semua') + '-' + modePDF + '-' + tglStr() + '.pdf';
       jalankan(this, function () { return window.UjianPDF.hasilPDF(D, daftar, { mode: modePDF, gambarDir: C.GAMBAR_DIR, namaFile: nm }); });
     };
-    $('#b-csv').onclick = function () { unduhCSV(arr); };
+    $('#b-csv').onclick = function () { jalankan(this, function () { return window.UjianExcel.rekapNilai(D, arr, { kelas: filterKelas }); }, 'Excel'); };
     $('#b-sheet').onclick = function () { api('guru_tulis_sheet', { pk: PK }).then(function (r) { toast(r.ok ? 'Sheet "Rekap ' + PK + '" & "Analisis ' + PK + '" diperbarui' : r.error); }).catch(function (e) { toast(e.message); }); };
   }
   function unduhCSV(arr) {
@@ -150,7 +150,7 @@
     var A = D.analisis, kkm = D.pengaturan.kkm, h = '';
     if (!A.n) { $('#t-analisis').innerHTML = '<div class="msg info">Belum ada siswa yang menyelesaikan ujian. Analisis muncul setelah ada hasil masuk.</div>'; return; }
     h += '<div class="cards"><div class="stat"><b>' + A.n + '</b><span>Peserta dianalisis</span></div><div class="stat"><b>' + num(A.rata) + '</b><span>Rata-rata</span></div><div class="stat"><b>' + num(A.simpangan) + '</b><span>Simpangan baku</span></div><div class="stat"><b>' + A.tuntas + ' (' + Math.round(A.tuntas / A.n * 100) + '%)</b><span>Tuntas ≥ ' + kkm + '</span></div><div class="stat"><b>' + (A.alpha == null ? '-' : String(A.alpha).replace('.', ',')) + '</b><span>Reliabilitas (α)</span></div></div>';
-    h += '<div class="row noprint"><button class="btn sm" id="b-apdf">Unduh PDF analisis butir</button><button class="btn sm" id="b-xlsx">Unduh Excel (benar-salah tiap nomor)</button><button class="btn sm sec" id="b-acsv">Unduh CSV</button><button class="btn sm line" id="b-aprint">Cetak</button></div>';
+    h += '<div class="row noprint"><button class="btn sm" id="b-apdf">Unduh PDF analisis butir</button><button class="btn sm" id="b-xlsx">Unduh Excel (benar-salah tiap nomor)</button><button class="btn sm line" id="b-aprint">Cetak</button></div>';
     var rn = window.UjianExcel.rekapNomor(D), nm = function (k) { var a = rn.filter(function (r) { return r.kat === k; }).sort(function (a, b) { return a.pct - b.pct; }).map(function (r) { return r.no + ' (' + Math.round(r.pct) + '%)'; }); return a.length ? a.join(', ') : '-'; };
     h += '<div class="msg info" style="line-height:1.7"><b>Benar penuh per nomor (dari ' + A.n + ' siswa)</b><br><span style="color:#b91c1c"><b>Rendah, perlu didalami (&lt; 50%):</b> ' + nm('Rendah') + '</span><br><b>Sedang (50-74%):</b> ' + nm('Sedang') + '<br><span style="color:#166534"><b>Sudah baik (&ge; 75%):</b> ' + nm('Baik') + '</span><br><span class="small">Excel berisi matriks siswa x nomor (benar = 1, salah = 0), jumlah benar/salah tiap nomor, nama siswa yang benar dan yang salah, urutan nomor terendah, dan rekap per materi.</span></div>';
     if (A.n < 6) h += '<div class="msg info">Peserta masih sedikit (< 6): daya pembeda belum dihitung.</div>';
@@ -167,7 +167,6 @@
     $$('tr[data-no]', $('#t-analisis')).forEach(function (tr) { tr.onclick = function () { detail(tr); }; });
     $('#b-apdf').onclick = function () { jalankan(this, function () { return window.UjianPDF.analisisPDF(D, {}); }); };
     $('#b-xlsx').onclick = function () { jalankan(this, function () { return window.UjianExcel.unduh(D, {}); }, 'Excel'); };
-    $('#b-acsv').onclick = function () { unduhAnalisisCSV(); };
     $('#b-aprint').onclick = function () { window.print(); };
   }
   function unduhAnalisisCSV() {
@@ -263,7 +262,7 @@
   /* ---------- riwayat siswa (semua paket) ---------- */
   function rRiwayat() {
     var R = D.riwayat, rows = R.siswa.filter(function (x) { return !filterKelas || x.kelas === filterKelas; });
-    var h = '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv-r">Unduh CSV (Excel)</button><span class="small">Nilai tiap siswa di semua paket yang bukan draf. Nilai paket lama tetap tersimpan.</span></div>';
+    var h = '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv-r">Unduh Excel</button><span class="small">Nilai tiap siswa di semua paket yang bukan draf. Nilai paket lama tetap tersimpan.</span></div>';
     if (!R.paket.length) { $('#t-riwayat').innerHTML = h + '<div class="msg info">Belum ada paket yang aktif.</div>'; return; }
     h += '<div class="tw"><table class="t"><tr><th>No</th><th>Nama</th><th>Kelas</th>' + R.paket.map(function (k) { return '<th class="n">' + esc(k) + '</th>'; }).join('') + '<th class="n">Rata²</th></tr>';
     rows.forEach(function (x, i) {
@@ -272,12 +271,7 @@
     });
     $('#t-riwayat').innerHTML = h + '</table></div>';
     $('#f-kelas').onchange = function () { filterKelas = this.value; rRiwayat(); };
-    $('#b-csv-r').onclick = function () {
-      var L = [['No', 'Nama', 'Kelas', 'NISN'].concat(R.paket)];
-      rows.forEach(function (x, i) { L.push([i + 1, x.nama, x.kelas, "'" + x.nisn].concat(R.paket.map(function (k) { return x.nilai[k] == null ? '' : x.nilai[k]; }))); });
-      var csv = '\ufeff' + L.map(function (r) { return r.map(function (v) { v = String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\r\n');
-      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'riwayat-nilai.csv'; document.body.appendChild(a); a.click(); a.remove();
-    };
+    $('#b-csv-r').onclick = function () { jalankan(this, function () { return window.UjianExcel.riwayat(D, rows, { kelas: filterKelas }); }, 'Excel'); };
   }
 
   /* ---------- awal ---------- */

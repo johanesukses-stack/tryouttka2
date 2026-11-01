@@ -205,16 +205,163 @@
       kotak(w5, HR + 1, HR + rm.length, 1, 6);
       [8, 40, 40, 12, 10, 12].forEach(function (w, i) { w5.getColumn(i + 1).width = w; });
 
-      var nama = opsi.namaFile || ('analisis-butir-matriks-' + String(D.pengaturan.pk || 'paket').toLowerCase() + '-' + tgl() + '.xlsx');
-      return wb.xlsx.writeBuffer().then(function (buf) {
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-        a.download = nama; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-        return nama;
-      });
+      /* 6. Analisis butir klasik (tingkat kesukaran, daya pembeda, sebaran) */
+      if (D.analisis && D.analisis.butir && D.analisis.butir.length) {
+        var A = D.analisis;
+        lembar(wb, {
+          nama: 'Analisis Butir', judul: 'Analisis Butir Soal (Tingkat Kesukaran dan Daya Pembeda)', info: info, landscape: true,
+          catatan: 'Tingkat kesukaran: < 30% sukar, 30-70% sedang, > 70% mudah (skor sebagian ikut dihitung). Daya pembeda dari kelompok atas/bawah 27% (dihitung bila peserta >= 6). * = kunci.',
+          kolom: [{ h: 'No', w: 6, al: 'c' }, { h: 'Materi', w: 30 }, { h: 'Tipe', w: 7, al: 'c' }, { h: 'Kunci', w: 11, al: 'c' }, { h: 'Tingkat Kesukaran', w: 12, al: 'c', fmt: '0%' }, { h: 'Kategori', w: 11, al: 'c' }, { h: 'Daya Pembeda', w: 11, al: 'c', fmt: '0.00' }, { h: 'Kategori DP', w: 12, al: 'c' }, { h: 'Sebaran jawaban', w: 46 }, { h: 'Kosong', w: 8, al: 'c' }, { h: 'Rekomendasi', w: 50 }],
+          baris: A.butir.map(function (b) { return [b.no, b.materi, b.tipe, b.kunci, b.p, b.kategori, b.dp == null ? '' : b.dp, b.kategori_dp || '', sebaranTeks(b), b.kosong || 0, b.rekomendasi]; }),
+          ringkas: [['Peserta', A.n], ['Rata-rata', A.rata], ['Simpangan baku', A.simpangan], ['Tertinggi', A.tertinggi], ['Terendah', A.terendah], ['Tuntas (KKM ' + D.pengaturan.kkm + ')', A.tuntas], ['Reliabilitas (alpha)', A.alpha == null ? '-' : A.alpha]],
+          warnaSel: function (c, v, kol) { if (kol === 5) { var k = v === 'Mudah' ? 'Baik' : v === 'Sedang' ? 'Sedang' : 'Rendah'; warnaKat(c, k); } }
+        });
+      }
+      return simpan(wb, opsi.namaFile || ('analisis-butir-matriks-' + String(D.pengaturan.pk || 'paket').toLowerCase() + '-' + tgl() + '.xlsx'));
     });
   }
 
-  root.UjianExcel = { rekapNomor: rekapNomor, rekapMateri: rekapMateri, unduh: unduh, BATAS_RENDAH: BATAS_RENDAH, BATAS_BAIK: BATAS_BAIK };
+  function sebaranTeks(b) {
+    var t = b.dist.map(function (x) {
+      if (b.tipe === 'bs') return 'P' + x.label + ' B' + x.n + (x.kunci === 'B' ? '*' : '') + '/S' + x.n2 + (x.kunci === 'S' ? '*' : '');
+      return (b.tipe === 'pg' ? x.label : 'P' + x.label) + '=' + x.n + (x.kunci ? '*' : '');
+    }).join('   ');
+    return t;
+  }
+
+  function simpan(wb, nama) {
+    return wb.xlsx.writeBuffer().then(function (buf) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      return nama;
+    });
+  }
+
+  /* ---------- lembar tabel profesional (dipakai Rekap Nilai, Riwayat, Analisis) ----------
+     o: { nama, judul, info, catatan, kolom:[{h,w,al:'c'|'r'|'l',fmt,teks}], baris:[[...]], ringkas:[[label,nilai]],
+          landscape, warnaSel(cell, nilai, indeksKolom, indeksBaris), akhir:[{label, kolomFormula:[idx...], fn:'AVERAGE'|'MAX'|'MIN'}] }  */
+  function lembar(wb, o, D) {
+    var HR = 5, nK = o.kolom.length, nB = o.baris.length, ws = wb.addWorksheet(o.nama, { properties: { defaultRowHeight: 18 } });
+    var P = (D || o.D);
+    ws.getCell('A1').value = o.judul; ws.getCell('A1').font = { bold: true, size: 15, color: { argb: BRAND } }; ws.getRow(1).height = 26;
+    ws.getCell('A2').value = o.info || ''; ws.getCell('A2').font = { color: { argb: 'FF475569' }, size: 10 };
+    ws.getCell('A3').value = o.catatan || ''; ws.getCell('A3').font = { italic: true, color: { argb: 'FF64748B' }, size: 9 };
+    o.kolom.forEach(function (k, i) { ws.getColumn(i + 1).width = k.w || 12; ws.getCell(HR, i + 1).value = k.h; });
+    kepala(ws.getRow(HR)); ws.getRow(HR).height = 34;
+    o.baris.forEach(function (b, ri) {
+      var r = HR + 1 + ri, row = ws.getRow(r);
+      b.forEach(function (v, ci) {
+        var k = o.kolom[ci], c = ws.getCell(r, ci + 1);
+        if (v === '' || v == null) c.value = null; else c.value = (k.teks ? String(v) : v);
+        if (k.teks) c.numFmt = '@'; else if (k.fmt) c.numFmt = k.fmt;
+        c.alignment = { horizontal: k.al === 'c' ? 'center' : k.al === 'r' ? 'right' : 'left', vertical: 'middle', wrapText: !k.al || k.al === 'l' };
+        c.font = { size: 10, color: { argb: 'FF1E293B' } };
+        c.border = GARIS;
+        if (ri % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F8F7' } };
+        if (o.warnaSel) o.warnaSel(c, v, ci, ri);
+      });
+      row.height = Math.max(18, o.tinggiBaris ? o.tinggiBaris(b) : 18);
+    });
+    var last = HR + nB;
+    /* baris ringkasan di bawah tabel (rumus Excel) */
+    var rr = last + 1;
+    (o.akhir || []).forEach(function (a) {
+      ws.getCell(rr, 1).value = a.label; ws.getCell(rr, 1).font = { bold: true };
+      a.kolom.forEach(function (ci) {
+        var col = huruf(ci + 1), vals = o.baris.map(function (b) { return Number(b[ci]); }).filter(function (x) { return isFinite(x) && x !== null; }), res = 0;
+        var nums = o.baris.map(function (b) { return b[ci]; }).filter(function (x) { return x !== '' && x != null && isFinite(Number(x)); }).map(Number);
+        if (nums.length) res = a.fn === 'AVERAGE' ? nums.reduce(function (x, y) { return x + y; }, 0) / nums.length : a.fn === 'MAX' ? Math.max.apply(null, nums) : Math.min.apply(null, nums);
+        var c = ws.getCell(rr, ci + 1); c.value = nums.length ? { formula: a.fn + '(' + col + (HR + 1) + ':' + col + last + ')', result: Math.round(res * 100) / 100 } : null;
+        c.numFmt = '0.0'; c.font = { bold: true }; c.alignment = { horizontal: 'center' };
+      });
+      for (var c2 = 1; c2 <= nK; c2++) { var cc = ws.getCell(rr, c2); cc.border = GARIS; cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F1EF' } }; }
+      rr++;
+    });
+    /* ringkasan nilai (kartu kecil) di bawah */
+    if (o.ringkas && o.ringkas.length) {
+      rr += 1; ws.getCell(rr, 1).value = 'Ringkasan'; ws.getCell(rr, 1).font = { bold: true, color: { argb: BRAND } }; rr++;
+      o.ringkas.forEach(function (p) {
+        ws.getCell(rr, 1).value = p[0]; ws.mergeCells(rr, 1, rr, Math.min(2, nK)); ws.getCell(rr, 1).font = { bold: true };
+        ws.getCell(rr, Math.min(3, nK)).value = p[1]; ws.getCell(rr, Math.min(3, nK)).alignment = { horizontal: 'left' };
+        rr++;
+      });
+    }
+    ws.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: nK } };
+    ws.views = [{ state: 'frozen', xSplit: o.bekuKolom || 0, ySplit: HR, showGridLines: false }];
+    ws.pageSetup = { paperSize: 9, orientation: o.landscape ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, printTitlesRow: HR + ':' + HR, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } };
+    ws.headerFooter = { oddFooter: '&L&8' + String(o.judul).replace(/&/g, '') + '&R&8Halaman &P dari &N' };
+    return ws;
+  }
+
+  /* ---------- Rekap Nilai (satu file, dua lembar) ---------- */
+  function rekapNilai(D, arr, opsi) {
+    opsi = opsi || {};
+    return muat().then(function () {
+      var kkm = Number(D.pengaturan.kkm) || 0, wb = new root.ExcelJS.Workbook(); wb.creator = D.pengaturan.judul || 'Ujian Online'; wb.created = new Date();
+      var done = arr.filter(function (o) { return o.x.nilai != null; }), nil = done.map(function (o) { return Number(o.x.nilai); });
+      var rata = nil.length ? nil.reduce(function (a, b) { return a + b; }, 0) / nil.length : 0, tuntas = nil.filter(function (v) { return v >= kkm; }).length;
+      var info = 'Paket: ' + (D.pengaturan.pk || '') + (D.pengaturan.mapel ? ' | ' + D.pengaturan.mapel : '') + (D.pengaturan.paket ? ' | ' + D.pengaturan.paket : '') + '    Kelas: ' + (opsi.kelas || 'Semua') + '    KKM: ' + kkm + '    Dibuat: ' + new Date().toLocaleDateString('id-ID');
+      var baris = arr.map(function (o, i) {
+        var x = o.x, r = o.r, st = x.nilai != null ? (x.nilai >= kkm ? 'Tuntas' : 'Belum tuntas') : (x.status === 'berlangsung' ? 'Mengerjakan' : 'Belum mulai');
+        return [i + 1, x.nama, x.kelas, x.nisn, x.status === 'selesai' || x.nilai != null ? 'Selesai' : x.status === 'berlangsung' ? 'Mengerjakan' : 'Belum', x.nilai == null ? '' : Number(x.nilai), st + (r && r.terlambat ? ' (terlambat)' : ''), r ? Number(r.durasi_menit) : '', r ? Number(r.keluar) : '', r ? r.kode : ''];
+      });
+      lembar(wb, {
+        nama: 'Rekap Nilai', judul: (D.pengaturan.judul || 'Ujian Online') + ' - Rekap Nilai Siswa', info: info, landscape: true, bekuKolom: 2,
+        catatan: 'Hijau = tuntas (nilai >= KKM), merah = belum tuntas. Klik tanda panah pada judul kolom untuk menyaring atau mengurutkan.',
+        kolom: [{ h: 'No', w: 6, al: 'c' }, { h: 'Nama Siswa', w: 32 }, { h: 'Kelas', w: 8, al: 'c' }, { h: 'NISN', w: 14, al: 'c', teks: true }, { h: 'Status', w: 13, al: 'c' }, { h: 'Nilai', w: 9, al: 'c', fmt: '0.0' }, { h: 'Keterangan', w: 20, al: 'c' }, { h: 'Durasi (menit)', w: 10, al: 'c', fmt: '0.0' }, { h: 'Keluar layar (kali)', w: 10, al: 'c' }, { h: 'Kode', w: 14, al: 'c' }],
+        baris: baris,
+        akhir: [{ label: 'Rata-rata', kolom: [5], fn: 'AVERAGE' }, { label: 'Tertinggi', kolom: [5], fn: 'MAX' }, { label: 'Terendah', kolom: [5], fn: 'MIN' }],
+        ringkas: [['Peserta', arr.length], ['Sudah selesai', done.length], ['Rata-rata nilai', Math.round(rata * 10) / 10], ['Tuntas (KKM ' + kkm + ')', tuntas + (done.length ? ' (' + Math.round(tuntas / done.length * 100) + '%)' : '')], ['Belum tuntas', done.length - tuntas]],
+        warnaSel: function (c, v, ci) {
+          if (ci === 5 && v !== '' && v != null) { var ok = Number(v) >= kkm; c.font = { bold: true, color: { argb: ok ? 'FF166534' : 'FF991B1B' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ok ? 'FFDCFCE7' : 'FFFEE2E2' } }; }
+          if (ci === 6) { var t = String(v); if (t.indexOf('Tuntas') === 0) { c.font = { bold: true, color: { argb: 'FF166534' } }; } else if (t.indexOf('Belum tuntas') === 0) { c.font = { bold: true, color: { argb: 'FF991B1B' } }; } else c.font = { color: { argb: 'FF64748B' } }; }
+        }
+      }, D);
+      /* lembar 2: skor tiap soal */
+      var sel = arr.filter(function (o) { return o.r; });
+      if (sel.length && D.soal.length) {
+        lembar(wb, {
+          nama: 'Skor per Soal', judul: (D.pengaturan.judul || 'Ujian Online') + ' - Skor Tiap Soal', info: info, landscape: true, bekuKolom: 2,
+          catatan: 'Isi sel = skor soal (1 = benar penuh, 0 = salah/kosong, di antaranya = benar sebagian). Hijau = 1, merah = 0, kuning = sebagian.',
+          kolom: [{ h: 'No', w: 6, al: 'c' }, { h: 'Nama Siswa', w: 30 }, { h: 'Kelas', w: 8, al: 'c' }].concat(D.soal.map(function (q) { return { h: 'S' + q.no, w: 6, al: 'c' }; })).concat([{ h: 'Total skor', w: 10, al: 'c', fmt: '0.0#' }]),
+          baris: sel.map(function (o, i) { var sk = D.soal.map(function (q) { return Number(o.r.skor[q.no]) || 0; }); return [i + 1, o.x.nama, o.x.kelas].concat(sk).concat([sk.reduce(function (a, b) { return a + b; }, 0)]); }),
+          warnaSel: function (c, v, ci) { if (ci >= 3 && ci < 3 + D.soal.length) { var n = Number(v) || 0; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: n >= 0.999 ? 'FFDCFCE7' : n > 0 ? 'FFFEF3C7' : 'FFFEE2E2' } }; } }
+        }, D);
+      }
+      return simpan(wb, 'rekap-nilai-' + String(D.pengaturan.pk || 'paket').toLowerCase() + (opsi.kelas ? '-' + String(opsi.kelas).toLowerCase() : '') + '-' + tgl() + '.xlsx');
+    });
+  }
+
+  /* ---------- Riwayat nilai siswa (semua paket) ---------- */
+  function riwayat(D, rows, opsi) {
+    opsi = opsi || {};
+    var R = D.riwayat;
+    if (!R || !R.paket.length) return Promise.reject(new Error('Belum ada paket yang bisa direkap.'));
+    return muat().then(function () {
+      var wb = new root.ExcelJS.Workbook(); wb.creator = D.pengaturan.judul || 'Ujian Online'; wb.created = new Date();
+      var kk = {}; (D.paket_list || []).forEach(function (p) { kk[p.pk] = Number(p.kkm) || 0; });
+      var info = 'Kelas: ' + (opsi.kelas || 'Semua') + '    Jumlah siswa: ' + rows.length + '    Dibuat: ' + new Date().toLocaleDateString('id-ID');
+      var nP = R.paket.length;
+      var baris = rows.map(function (x, i) {
+        var v = R.paket.map(function (k) { return x.nilai[k] == null ? '' : Number(x.nilai[k]); }), ada = v.filter(function (n) { return n !== ''; });
+        return [i + 1, x.nama, x.kelas, x.nisn].concat(v).concat([ada.length ? ada.reduce(function (a, b) { return a + b; }, 0) / ada.length : '']);
+      });
+      var ws = lembar(wb, {
+        nama: 'Riwayat Nilai', judul: (D.pengaturan.judul || 'Ujian Online') + ' - Riwayat Nilai Siswa Semua Paket', info: info, landscape: nP > 3, bekuKolom: 2,
+        catatan: 'Hijau = tuntas (>= KKM paket), merah = belum tuntas, kosong = belum mengikuti. Kolom terakhir = rata-rata dari paket yang diikuti.',
+        kolom: [{ h: 'No', w: 6, al: 'c' }, { h: 'Nama Siswa', w: 32 }, { h: 'Kelas', w: 8, al: 'c' }, { h: 'NISN', w: 14, al: 'c', teks: true }].concat(R.paket.map(function (k) { return { h: k + (kk[k] ? '\n(KKM ' + kk[k] + ')' : ''), w: 13, al: 'c', fmt: '0.0' }; })).concat([{ h: 'Rata-rata', w: 11, al: 'c', fmt: '0.0' }]),
+        baris: baris,
+        akhir: [{ label: 'Rata-rata', kolom: R.paket.map(function (_, j) { return 4 + j; }), fn: 'AVERAGE' }],
+        warnaSel: function (c, v, ci) {
+          if (ci >= 4 && ci < 4 + nP && v !== '' && v != null) { var ok = Number(v) >= (kk[R.paket[ci - 4]] || 0); c.font = { bold: true, color: { argb: ok ? 'FF166534' : 'FF991B1B' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ok ? 'FFDCFCE7' : 'FFFEE2E2' } }; }
+          if (ci === 4 + nP) c.font = { bold: true };
+        }
+      }, D);
+      return simpan(wb, 'riwayat-nilai-' + (opsi.kelas ? String(opsi.kelas).toLowerCase() + '-' : '') + tgl() + '.xlsx');
+    });
+  }
+
+  root.UjianExcel = { rekapNilai: rekapNilai, riwayat: riwayat, rekapNomor: rekapNomor, rekapMateri: rekapMateri, unduh: unduh, BATAS_RENDAH: BATAS_RENDAH, BATAS_BAIK: BATAS_BAIK };
 })(typeof window !== 'undefined' ? window : globalThis);
