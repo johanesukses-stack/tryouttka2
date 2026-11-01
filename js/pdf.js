@@ -2,6 +2,7 @@
    Modul PDF halaman guru (dimuat dari guru.html)
    - UjianPDF.hasilPDF(D, daftarHasil, opsi)  -> PDF jawaban siswa vs kunci
    - UjianPDF.analisisPDF(D, opsi)            -> PDF analisis butir soal
+   - UjianPDF.petaPDF(D, daftarHasil, opsi)   -> PDF Peta Belajar (insight per siswa)
    Library jsPDF + autoTable dimuat otomatis saat tombol PDF ditekan.
    ============================================================ */
 (function (root) {
@@ -372,5 +373,154 @@
     });
   }
 
-  root.UjianPDF = { siap: siap, hasilPDF: hasilPDF, analisisPDF: analisisPDF, _T: T, _teksJawaban: teksJawaban, _statusButir: statusButir };
+
+  /* ============================================================
+     PETA BELAJAR SISWA (insight per anak: materi dikuasai / belum)
+     Untuk guru, orang tua, dan siswa. Satu siswa = 1-2 halaman.
+     ============================================================ */
+  var BATAS_KUASAI = 0.75, BATAS_TUMBUH = 0.5;
+  function levelMateri(p) {
+    if (p >= BATAS_KUASAI) return { label: 'Dikuasai', warna: C_OK, kode: 'k' };
+    if (p >= BATAS_TUMBUH) return { label: 'Berkembang', warna: C_WARN, kode: 'b' };
+    return { label: 'Perlu penguatan', warna: C_BAD, kode: 'p' };
+  }
+  function perMateri(D, rec) {
+    var mp = {}, urut = [];
+    D.soal.forEach(function (q) {
+      var m = q.materi || 'Umum';
+      if (!mp[m]) { mp[m] = { materi: m, bobot: 0, skor: 0, nomor: [], dilatih: [], kosong: 0 }; urut.push(m); }
+      var o = mp[m], b = Number(q.bobot) || 1, st = statusButir(q, rec);
+      o.bobot += b; o.skor += st.skor * b; o.nomor.push(q.no);
+      if (st.label !== 'Benar') o.dilatih.push(q.no);
+      if (st.label === 'Kosong') o.kosong++;
+    });
+    return urut.map(function (m) { var o = mp[m]; o.p = o.bobot ? Math.min(1, o.skor / o.bobot) : 0; return o; });
+  }
+  function rataMateri(D) {
+    var jum = {}, n = 0;
+    (D.hasil || []).forEach(function (r) { n++; perMateri(D, r).forEach(function (m) { jum[m.materi] = (jum[m.materi] || 0) + m.p; }); });
+    var o = {}; Object.keys(jum).forEach(function (k) { o[k] = n ? jum[k] / n : 0; }); return o;
+  }
+  function daftarTeks(a) { return a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' dan ' + a[a.length - 1]; }
+  function posisi(nilai, kkm) {
+    if (nilai >= kkm + 15) return { label: 'SANGAT BAIK', warna: C_OK, kal: 'sudah jauh melampaui batas ketuntasan' };
+    if (nilai >= kkm) return { label: 'BAIK (TUNTAS)', warna: C_OK, kal: 'sudah mencapai batas ketuntasan' };
+    if (nilai >= kkm - 15) return { label: 'CUKUP - HAMPIR TUNTAS', warna: C_WARN, kal: 'sudah dekat dengan batas ketuntasan, tinggal sedikit penguatan' };
+    return { label: 'PERLU PENDAMPINGAN', warna: C_BAD, kal: 'masih membutuhkan pendampingan pada beberapa materi' };
+  }
+
+  function petaPDF(D, daftar, opsi) {
+    opsi = opsi || {};
+    if (!daftar || !daftar.length) return Promise.reject(new Error('Belum ada siswa yang selesai mengerjakan.'));
+    return siap().then(function () {
+      var doc = buatDoc('portrait'), W = 210, H = 297, M = 14, CW = W - 2 * M, TOP = 16, BOT = 16;
+      var kkm = D.pengaturan.kkm, judul = D.pengaturan.judul || 'Ujian Online', mapel = D.pengaturan.mapel || 'mata pelajaran ini';
+      var rataKelas = (D.analisis && D.analisis.n) ? D.analisis.rata : null, avg = rataMateri(D);
+      var ctx = { y: 0, run: '' };
+
+      function halamanBaru() { doc.addPage(); ctx.y = TOP; font(doc, 7.5, 'normal', MUTED); doc.text(T(ctx.run), M, 9.5); doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.line(M, 11, W - M, 11); }
+      function pastikan(h) { if (ctx.y + h > H - BOT) halamanBaru(); }
+      function judulBagian(t) { pastikan(14); ctx.y += 3; font(doc, 11, 'bold', BRAND); doc.text(T(t), M, ctx.y); ctx.y += 2; doc.setDrawColor(BRAND[0], BRAND[1], BRAND[2]); doc.setLineWidth(0.4); doc.line(M, ctx.y, M + CW, ctx.y); ctx.y += 5; }
+      function teks(t, o) {
+        o = o || {}; var sz = o.size || 9.5, lh = sz * 0.46, x = M + (o.indent || 0), w = CW - (o.indent || 0);
+        font(doc, sz, o.style || 'normal', o.warna || INK);
+        var ln = doc.splitTextToSize(T(t), w);
+        ln.forEach(function (l) { pastikan(lh + 0.5); font(doc, sz, o.style || 'normal', o.warna || INK); doc.text(l, x, ctx.y); ctx.y += lh; });
+        ctx.y += (o.after == null ? 1.2 : o.after);
+      }
+      function butir(t, o) { o = o || {}; var y0 = ctx.y; pastikan(6); doc.setFillColor(BRAND[0], BRAND[1], BRAND[2]); doc.circle ? doc.circle(M + 1.6, ctx.y - 1.1, 0.7, 'F') : doc.rect(M + 1, ctx.y - 1.6, 1, 1, 'F'); teks(t, { indent: 5, size: o.size, style: o.style, warna: o.warna, after: 1.4 }); }
+
+      daftar.forEach(function (rec, idx) {
+        rec.jawaban = rec.jawaban || {}; rec.skor = rec.skor || {};
+        if (idx > 0) doc.addPage();
+        ctx.run = 'Peta Belajar - ' + rec.nama + ' · ' + rec.kelas;
+        var nilai = Number(rec.nilai) || 0, ps = posisi(nilai, kkm), rs = ringkasan(D, rec);
+        var mm = perMateri(D, rec);
+        var kuat = mm.filter(function (m) { return m.p >= BATAS_KUASAI; }).sort(function (a, b) { return b.p - a.p; });
+        var tumbuh = mm.filter(function (m) { return m.p >= BATAS_TUMBUH && m.p < BATAS_KUASAI; }).sort(function (a, b) { return a.p - b.p; });
+        var lemah = mm.filter(function (m) { return m.p < BATAS_TUMBUH; }).sort(function (a, b) { return a.p - b.p; });
+        var perlu = lemah.concat(tumbuh);                       // urutan prioritas: terendah dahulu
+
+        /* kepala */
+        band(doc, W, judul, 'Peta Belajar Siswa  |  ' + namaPaket(D));
+        font(doc, 8, 'normal', MUTED); doc.text('Nama', M, 25); doc.text('Kelas / NISN', M, 31); doc.text('Mata pelajaran', M, 37);
+        font(doc, 12, 'bold'); doc.text(T(rec.nama), M + 30, 25);
+        font(doc, 9.5, 'normal'); doc.text(T(rec.kelas + '  /  ' + rec.nisn), M + 30, 31); doc.text(T(mapel + (D.pengaturan.paket ? ' - ' + D.pengaturan.paket : '')), M + 30, 37);
+        var bx = W - M - 46;
+        doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.4); doc.roundedRect(bx, 21, 46, 22, 2, 2, 'S');
+        font(doc, 7.5, 'normal', MUTED); doc.text('NILAI TRYOUT', bx + 23, 26, { align: 'center' });
+        font(doc, 21, 'bold', ps.warna); doc.text(num(nilai), bx + 23, 36, { align: 'center' });
+        font(doc, 7, 'normal', MUTED); doc.text('KKM ' + kkm + (rataKelas != null ? '  |  rata-rata kelas ' + num(rataKelas) : ''), bx + 23, 40.7, { align: 'center' });
+        doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.line(M, 46, W - M, 46);
+        ctx.y = 52;
+
+        /* posisi */
+        font(doc, 9.5, 'normal', MUTED); doc.text('Posisi saat ini:', M, ctx.y);
+        font(doc, 12, 'bold', ps.warna); doc.text(T(ps.label), M + 28, ctx.y);
+        ctx.y += 6;
+        var banding = rataKelas == null ? '' : (nilai > rataKelas + 2 ? ' Nilai berada di atas rata-rata kelas.' : nilai < rataKelas - 2 ? ' Nilai berada di bawah rata-rata kelas.' : ' Nilai setara dengan rata-rata kelas.');
+        teks('Pada tryout ini Ananda menjawab benar penuh ' + rs.benar + ' dari ' + D.soal.length + ' soal' + (rs.sebagian ? ', benar sebagian ' + rs.sebagian + ' soal' : '') + (rs.kosong ? ', dan ' + rs.kosong + ' soal belum dijawab' : '') + '. Capaian ' + ps.kal + ' (KKM ' + kkm + ').' + banding, { after: 2 });
+
+        /* peta materi */
+        judulBagian('Peta penguasaan materi');
+        teks('Batang menunjukkan persentase penguasaan Ananda pada tiap materi. Garis hitam di batang = rata-rata kelas. Dikuasai >= 75%, Berkembang 50-74%, Perlu penguatan < 50%.', { size: 7.8, warna: MUTED, after: 3 });
+        var BX = M + 74, BW = 48;
+        mm.slice().sort(function (a, b) { return a.p - b.p; }).forEach(function (m) {
+          var lv = levelMateri(m.p), lab = doc.splitTextToSize(T(m.materi), 70), baris = Math.max(lab.length * 4, 5);
+          var det = m.dilatih.length ? 'Soal nomor ' + m.nomor.join(', ') + '. Perlu dilatih ulang: nomor ' + m.dilatih.join(', ') + (m.kosong ? ' (' + m.kosong + ' belum dijawab)' : '') + '.' : 'Soal nomor ' + m.nomor.join(', ') + '. Semua benar.';
+          var dl = doc.splitTextToSize(T(det), CW - 4);
+          pastikan(baris + dl.length * 3.4 + 4);
+          var y = ctx.y;
+          font(doc, 9, 'normal'); lab.forEach(function (l, i) { doc.text(l, M, y + i * 4); });
+          doc.setFillColor(LINE[0], LINE[1], LINE[2]); doc.rect(BX, y - 3, BW, 3.8, 'F');
+          doc.setFillColor(lv.warna[0], lv.warna[1], lv.warna[2]); if (m.p > 0) doc.rect(BX, y - 3, BW * m.p, 3.8, 'F');
+          var ka = avg[m.materi]; if (ka != null) { doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.5); doc.line(BX + BW * ka, y - 4, BX + BW * ka, y + 1.4); }
+          font(doc, 9, 'bold', lv.warna); doc.text(Math.round(m.p * 100) + '%', BX + BW + 3, y);
+          font(doc, 8.5, 'bold', lv.warna); doc.text(T(lv.label), BX + BW + 15, y);
+          ctx.y = y + baris;
+          font(doc, 7.5, 'normal', MUTED); dl.forEach(function (l) { doc.text(l, M + 2, ctx.y); ctx.y += 3.4; });
+          doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M, ctx.y, M + CW, ctx.y); ctx.y += 4;
+        });
+
+        /* ringkas kuat / perlu */
+        judulBagian('Ringkasan');
+        teks('Sudah dikuasai: ' + (kuat.length ? kuat.map(function (m) { return m.materi + ' (' + Math.round(m.p * 100) + '%)'; }).join('; ') : 'belum ada materi yang mencapai 75%; mulai dari materi yang paling mendekati (lihat urutan di bawah).'), { warna: C_OK, style: 'bold', after: 1.5 });
+        teks('Perlu diperkuat (urutan prioritas): ' + (perlu.length ? perlu.map(function (m) { return m.materi + ' (' + Math.round(m.p * 100) + '%)'; }).join('; ') : 'tidak ada, semua materi sudah dikuasai.'), { warna: perlu.length ? C_BAD : C_OK, style: 'bold', after: 2 });
+
+        /* panduan guru */
+        judulBagian('Panduan untuk guru');
+        if (perlu.length) {
+          perlu.slice(0, 4).forEach(function (m) {
+            butir(m.materi + ' (' + Math.round(m.p * 100) + '%): ulangi konsep dasar dengan contoh bertahap, lalu beri 3-5 soal latihan setara pada nomor ' + (m.dilatih.join(', ') || '-') + '. Periksa apakah kesalahan berasal dari konsep, ketelitian membaca soal, atau kurang waktu' + (m.kosong ? ' (ada soal yang belum dijawab)' : '') + '.');
+          });
+          if (perlu.length > 4) teks('Materi lain yang juga perlu perhatian: ' + perlu.slice(4).map(function (m) { return m.materi; }).join('; ') + '.', { indent: 5, size: 8.5, warna: MUTED });
+        } else butir('Semua materi sudah dikuasai. Beri soal pengayaan atau tugas tutor sebaya agar Ananda tetap tertantang.');
+        if (kuat.length) butir('Kekuatan yang dapat dimanfaatkan: ' + daftarTeks(kuat.slice(0, 3).map(function (m) { return m.materi; })) + '.');
+        if (rs.kosong >= 3) butir('Ada ' + rs.kosong + ' soal yang belum dijawab; latih pengelolaan waktu dan strategi mengerjakan soal yang mudah lebih dahulu.');
+        if ((rec.keluar || 0) >= 3) butir('Layar ujian tercatat ditinggalkan ' + rec.keluar + ' kali; ingatkan untuk fokus pada layar ujian.');
+
+        /* panduan orang tua */
+        judulBagian('Panduan untuk orang tua / wali');
+        teks('Gambaran ini diambil dari satu kali tryout, sehingga sifatnya sebagai peta awal untuk menentukan fokus belajar, bukan penilaian akhir.', { size: 8.5, warna: MUTED, after: 2 });
+        if (kuat.length) butir('Ananda sudah baik pada ' + daftarTeks(kuat.slice(0, 3).map(function (m) { return m.materi; })) + '. Berikan apresiasi atas usahanya.');
+        if (perlu.length) {
+          butir('Bantu Ananda berlatih terutama pada ' + daftarTeks(perlu.slice(0, 2).map(function (m) { return m.materi; })) + ', sekitar 15-20 menit per hari, tidak perlu lama tetapi rutin.');
+          butir('Ajak Ananda menjelaskan kembali dengan kata-katanya sendiri; bila ia bisa menjelaskan, berarti konsepnya sudah dipahami.');
+          butir('Hindari membandingkan dengan teman. Fokus pada kemajuan Ananda dari minggu ke minggu.');
+        } else butir('Pertahankan kebiasaan belajar yang sudah baik, dan beri kesempatan Ananda mencoba soal yang lebih menantang.');
+        butir('Pastikan tidur cukup dan sarapan sebelum ujian; suasana tenang membantu Ananda berpikir jernih.');
+
+        /* pesan untuk anak */
+        judulBagian('Pesan untuk Ananda');
+        teks((kuat.length ? 'Hebat! Kamu sudah kuat di ' + daftarTeks(kuat.slice(0, 3).map(function (m) { return m.materi; })) + '. ' : 'Terima kasih sudah berusaha mengerjakan sampai selesai. ') + (perlu.length ? 'Langkah berikutnya: latih sedikit demi sedikit ' + daftarTeks(perlu.slice(0, 2).map(function (m) { return m.materi; })) + '. Setiap hari 15 menit saja, kamu pasti bisa naik!' : 'Pertahankan ya, dan bantu temanmu yang belum paham.'), { after: 1 });
+      });
+
+      footer(doc, W, H, judul + '  |  Peta Belajar ' + (D.pengaturan.pk || ''));
+      var nama = opsi.namaFile || ('peta-belajar-' + (D.pengaturan.pk || 'paket').toLowerCase() + '-' + (daftar.length === 1 ? slug(daftar[0].nama) : 'semua') + '-' + tgl() + '.pdf');
+      doc.save(nama);
+      return nama;
+    });
+  }
+
+  root.UjianPDF = { petaPDF: petaPDF, siap: siap, hasilPDF: hasilPDF, analisisPDF: analisisPDF, _T: T, _teksJawaban: teksJawaban, _statusButir: statusButir };
 })(typeof window !== 'undefined' ? window : globalThis);
