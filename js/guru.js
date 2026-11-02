@@ -43,7 +43,7 @@
     muat().then(function () { try { sessionStorage.setItem('g_pin', PIN); } catch (x) {} }).catch(function (er) { m.hidden = false; m.textContent = er.message; });
   };
   $('#g-out').onclick = function () { try { sessionStorage.removeItem('g_pin'); } catch (x) {} location.reload(); };
-  $('#g-ref').onclick = function () { linkCache = {}; muat().then(function () { toast('Data diperbarui'); }).catch(function (e) { toast(e.message); }); };
+  $('#g-ref').onclick = function () { linkCache = {}; DPK = {}; muat().then(function () { toast('Data diperbarui'); }).catch(function (e) { toast(e.message); }); };
   $$('#g-tabs button').forEach(function (b) { b.onclick = function () { gantiTab(b.dataset.t); }; });
   $('#g-pk').onchange = function () { PK = this.value; muat().catch(function (e) { toast(e.message); }); };
 
@@ -107,7 +107,7 @@
     h += '<div class="tw"><table class="t"><tr><th>No</th><th class="s" data-s="nama">Nama</th><th class="s" data-s="kelas">Kelas</th><th>NISN</th><th class="s n" data-s="nilai">Nilai ▾</th><th class="n">Durasi</th><th class="n">Keluar</th><th>Kode</th><th>Ket.</th><th class="noprint">WA Ortu</th><th class="noprint"></th></tr>';
     arr.forEach(function (o, i) {
       var x = o.x, r = o.r, ket = x.nilai == null ? '<span class="tag">' + (x.status === 'berlangsung' ? 'Mengerjakan' : 'Belum') + '</span>' : (x.nilai >= kkm ? '<span class="tag ok">Tuntas</span>' : '<span class="tag b">Belum tuntas</span>') + (r && r.terlambat ? ' <span class="tag w">Terlambat</span>' : '');
-      h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + esc(x.nisn) + '</td><td class="n"><b>' + (x.nilai != null ? num(x.nilai) : '') + '</b></td><td class="n">' + (r ? num(r.durasi_menit) + ' mnt' : '') + '</td><td class="n">' + (r ? r.keluar : '') + '</td><td>' + (r ? esc(r.kode) : '') + '</td><td>' + ket + '</td><td class="noprint">' + waSel(x) + '</td><td class="noprint" style="white-space:nowrap">' + (r ? '<button class="btn sm line" data-pdf="' + esc(x.nisn) + '">PDF</button> <button class="btn sm line" data-peta="' + esc(x.nisn) + '">Peta</button> <button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" data-wa="' + esc(x.nisn) + '">Kirim WA</button>' : '') + '</td></tr>';
+      h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + esc(x.nisn) + '</td><td class="n"><b>' + (x.nilai != null ? num(x.nilai) : '') + '</b></td><td class="n">' + (r ? num(r.durasi_menit) + ' mnt' : '') + '</td><td class="n">' + (r ? r.keluar : '') + '</td><td>' + (r ? esc(r.kode) : '') + '</td><td>' + ket + '</td><td class="noprint">' + waSel(x) + '</td><td class="noprint" style="white-space:nowrap">' + (r ? '<button class="btn sm line" data-pdf="' + esc(x.nisn) + '">PDF</button> <button class="btn sm line" data-peta="' + esc(x.nisn) + '">Peta</button> <button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" data-wa="' + esc(x.nisn) + '">Kirim WA</button>' : '') + (adaHasil(x.nisn) ? ' <button class="btn sm line" style="color:var(--ok);border-color:var(--ok)" data-wag="' + esc(x.nisn) + '">Semua mapel</button>' : '') + '</td></tr>';
     });
     $('#t-rekap').innerHTML = h + '</table></div>';
     $('#f-kelas').onchange = function () { filterKelas = this.value; rRekap(); };
@@ -151,6 +151,13 @@
       b.onclick = function () { var x = D.siswa.filter(function (z) { return z.nisn === b.dataset.waedit; })[0]; ubahWA(x).then(function () { rRekap(); }); };
     });
     $('#b-wamassal').onclick = function () { massal(arr); };
+    $('#b-wagab').onclick = function () { massalGab(); };
+    $$('[data-wag]', $('#t-rekap')).forEach(function (b) {
+      b.onclick = function () {
+        var x = D.siswa.filter(function (z) { return z.nisn === b.dataset.wag; })[0];
+        kirimGab(x, pakGab(), b, function () { if (tab === 'rekap') rRekap(); });
+      };
+    });
     $('#b-watpl').onclick = function () { jalankan(this, function () { return window.UjianExcel.templateWA(D); }, 'Template'); };
     $('#b-waup').onclick = function () { $('#i-waup').click(); };
     $('#i-waup').onchange = function () {
@@ -190,25 +197,27 @@
   function toolbarWA(rows) {
     var ada = rows.filter(function (x) { return x.wa; }).length;
     return '<div class="row noprint"><b style="font-size:14px">Kirim ke orang tua (WhatsApp):</b><select id="f-wa"><option value="keduanya"' + (modeWA === 'keduanya' ? ' selected' : '') + '>PDF jawaban + Peta Belajar</option><option value="peta"' + (modeWA === 'peta' ? ' selected' : '') + '>Hanya Peta Belajar</option><option value="hasil"' + (modeWA === 'hasil' ? ' selected' : '') + '>Hanya PDF jawaban</option></select>' +
-      '<button class="btn sm" id="b-wamassal">Kirim massal…</button><button class="btn sm line" id="b-watpl">Unduh template nomor WA</button><button class="btn sm line" id="b-waup">Unggah nomor WA</button><input type="file" id="i-waup" accept=".xlsx,.csv" hidden></div>' +
-      '<p class="small noprint" style="margin-top:-4px">Nomor WA terisi: <b>' + ada + '</b> dari ' + rows.length + ' siswa. Klik <b>Kirim WA</b> pada baris siswa: file dibuat, disimpan ke Google Drive, lalu WhatsApp terbuka ke nomor orang tua dengan pesan berisi tautan. Tinggal tekan Kirim di WhatsApp.</p>';
+      '<button class="btn sm" id="b-wamassal">Kirim massal…</button><button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" id="b-wagab">Kirim semua mapel…</button><button class="btn sm line" id="b-watpl">Unduh template nomor WA</button><button class="btn sm line" id="b-waup">Unggah nomor WA</button><input type="file" id="i-waup" accept=".xlsx,.csv" hidden></div>' +
+      '<p class="small noprint" style="margin-top:-4px">Nomor WA terisi: <b>' + ada + '</b> dari ' + rows.length + ' siswa. Klik <b>Kirim WA</b> pada baris siswa: file dibuat, disimpan ke Google Drive, lalu WhatsApp terbuka ke nomor orang tua dengan pesan berisi tautan. Tinggal tekan Kirim di WhatsApp. <b>Kirim semua mapel</b> = satu pesan berisi hasil semua mapel sekaligus.</p>';
   }
   function pilihJenis() { return modeWA === 'keduanya' ? ['hasil', 'peta'] : [modeWA]; }
-  function kunciLink(rec, j) { return PK + '|' + rec.nisn + '|' + j + '|' + (j === 'hasil' ? modePDF : ''); }
-  function linkSiap(rec) {
+  function kunciLink(rec, j, pk) { return (pk || PK) + '|' + rec.nisn + '|' + j + '|' + (j === 'hasil' ? modePDF : ''); }
+  function linkSiap(rec, pk) {
     var out = {}, ok = true;
-    pilihJenis().forEach(function (j) { var u = linkCache[kunciLink(rec, j)]; if (u) out[j] = u; else ok = false; });
+    pilihJenis().forEach(function (j) { var u = linkCache[kunciLink(rec, j, pk)]; if (u) out[j] = u; else ok = false; });
     return ok ? out : null;
   }
-  function siapkanLink(rec, jenis) {
-    var key = kunciLink(rec, jenis);
+  function siapkanLink(rec, jenis, Dx) {
+    Dx = Dx || D;
+    var key = kunciLink(rec, jenis, Dx.pk);
     if (linkCache[key]) return Promise.resolve(linkCache[key]);
-    var buat = jenis === 'peta' ? window.UjianPDF.petaPDF(D, [rec], { kembalikan: true }) : window.UjianPDF.hasilPDF(D, [rec], { mode: modePDF, gambarDir: C.GAMBAR_DIR, kembalikan: true });
-    return Promise.resolve(buat).then(function (f) { return api('guru_unggah', { pk: PK, nisn: rec.nisn, jenis: jenis, base64: f.base64 }); })
+    var buat = jenis === 'peta' ? window.UjianPDF.petaPDF(Dx, [rec], { kembalikan: true }) : window.UjianPDF.hasilPDF(Dx, [rec], { mode: modePDF, gambarDir: C.GAMBAR_DIR, kembalikan: true });
+    return Promise.resolve(buat).then(function (f) { return api('guru_unggah', { pk: Dx.pk, nisn: rec.nisn, jenis: jenis, base64: f.base64 }); })
       .then(function (r) { if (!r.ok) throw new Error(r.error || 'Gagal mengunggah file.'); linkCache[key] = r.url; return r.url; });
   }
-  function siapkanSemuaLink(rec) {
-    return pilihJenis().reduce(function (p, j) { return p.then(function () { return siapkanLink(rec, j); }); }, Promise.resolve()).then(function () { return linkSiap(rec); });
+  function siapkanSemuaLink(rec, Dx) {
+    Dx = Dx || D;
+    return pilihJenis().reduce(function (p, j) { return p.then(function () { return siapkanLink(rec, j, Dx); }); }, Promise.resolve()).then(function () { return linkSiap(rec, Dx.pk); });
   }
   function pesanWA(x, rec, links) {
     var P = D.pengaturan, nilai = rec && rec.nilai != null ? rec.nilai : x.nilai;
@@ -224,10 +233,11 @@
     return tpl.replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }).replace(/\n{3,}/g, '\n\n').trim();
   }
   function urlWA(wa, pesan) { return 'https://wa.me/' + wa + '?text=' + encodeURIComponent(pesan); }
-  function tandai(x) { TERKIRIM[PK + '|' + x.nisn] = Date.now(); try { localStorage.setItem('g_wa_kirim', JSON.stringify(TERKIRIM)); } catch (e) {} }
+  function tandai(x, pk) { TERKIRIM[(pk || PK) + '|' + x.nisn] = Date.now(); try { localStorage.setItem('g_wa_kirim', JSON.stringify(TERKIRIM)); } catch (e) {} }
 
   function setWA(x, w) { // perbarui salinan lokal
     x.wa = w;
+    (D.siswa || []).forEach(function (z) { if (z.nisn === x.nisn) z.wa = w; });
     ((D.riwayat && D.riwayat.siswa) || []).forEach(function (z) { if (z.nisn === x.nisn) z.wa = w; });
   }
   function ubahWA(x) { // tanya nomor (sinkron) lalu simpan ke sheet
@@ -324,6 +334,145 @@
       })();
     };
   }
+  /* ---------- kirim gabungan: semua mapel dalam SATU pesan WhatsApp ---------- */
+  var DPK = {}, gabPks = null;
+  function ambilD(pk) { // data lengkap paket lain (soal, hasil, analisis), disimpan sementara
+    if (pk === PK) return Promise.resolve(D);
+    if (DPK[pk]) return Promise.resolve(DPK[pk]);
+    return api('guru', { pk: pk }).then(function (r) { if (!r.ok) throw new Error(r.error || 'Gagal memuat paket ' + pk); DPK[pk] = r; return r; });
+  }
+  function recDi(Dx, nisn) { return (Dx.hasil || []).filter(function (h) { return h.nisn === nisn; })[0]; }
+  function pksDefault() { // satu paket per mapel: yang paling banyak sudah selesai
+    var per = {};
+    (D.paket_list || []).forEach(function (p) {
+      if (p.status === 'draf' || p.status === 'arsip' || !p.n_selesai) return;
+      var c = per[p.mapel]; if (!c || p.n_selesai >= c.n_selesai) per[p.mapel] = p;
+    });
+    return Object.keys(per).map(function (m) { return per[m].pk; });
+  }
+  function pakGab() {
+    var ids = gabPks || pksDefault();
+    return (D.paket_list || []).filter(function (p) { return ids.indexOf(p.pk) >= 0; }).map(function (p) { return p.pk; });
+  }
+  function adaHasil(nisn) {
+    var s = ((D.riwayat && D.riwayat.siswa) || []).filter(function (z) { return z.nisn === nisn; })[0];
+    return !!s && Object.keys(s.nilai || {}).some(function (k) { return s.nilai[k] != null; });
+  }
+  function gabSiap(x, pks) { // sinkron; null bila ada file yang belum disiapkan
+    var items = [];
+    for (var i = 0; i < pks.length; i++) {
+      var pk = pks[i], Dx = pk === PK ? D : DPK[pk]; if (!Dx) return null;
+      var rec = recDi(Dx, x.nisn); if (!rec) continue;
+      var links = linkSiap(rec, pk); if (!links) return null;
+      items.push({ pk: pk, Dx: Dx, rec: rec, links: links });
+    }
+    return items;
+  }
+  function siapkanGab(x, pks) {
+    var items = [];
+    return pks.reduce(function (p, pk) {
+      return p.then(function () { return ambilD(pk); }).then(function (Dx) {
+        var rec = recDi(Dx, x.nisn); if (!rec) return;
+        return siapkanSemuaLink(rec, Dx).then(function (links) { items.push({ pk: pk, Dx: Dx, rec: rec, links: links }); });
+      });
+    }, Promise.resolve()).then(function () { return items; });
+  }
+  function pesanGab(x, items) {
+    var L = ["Assalamu'alaikum Bapak/Ibu, wali murid dari *" + x.nama + "* (kelas " + x.kelas + ").", '', 'Berikut hasil ' + D.pengaturan.judul + ':'];
+    items.forEach(function (it) {
+      var P = it.Dx.pengaturan, n = it.rec.nilai;
+      L.push('', '*' + (P.mapel || it.pk) + '*' + (P.paket ? ' - ' + P.paket : ''), 'Nilai: *' + num(n) + '* (' + (n >= P.kkm ? 'Tuntas' : 'Belum tuntas, KKM ' + P.kkm) + ')');
+      if (it.links.hasil) L.push('📄 PDF jawaban & pembahasan:', it.links.hasil);
+      if (it.links.peta) L.push('🧭 Peta Belajar:', it.links.peta);
+    });
+    L.push('', 'Mohon Ananda didampingi belajar di rumah. Terima kasih.');
+    return L.join('\n');
+  }
+  function tandaiGab(x, items) { items.forEach(function (it) { tandai(x, it.pk); }); }
+
+  /** Satu siswa: semua mapel terpilih -> satu pesan WhatsApp. */
+  function kirimGab(x, pks, btn, selesai) {
+    if (!pks.length) { toast('Belum ada paket yang dipilih.'); return; }
+    var wa = x.wa;
+    if (!wa) { wa = tanyaWA(x); if (!wa) return; }
+    var cache = gabSiap(x, pks);
+    if (cache) {
+      if (!cache.length) { toast('Siswa ini belum menyelesaikan paket yang dipilih.'); return; }
+      window.open(urlWA(wa, pesanGab(x, cache)), '_blank'); tandaiGab(x, cache); if (selesai) selesai(); return;
+    }
+    var jendela = window.open('', '_blank');
+    if (jendela) { try { jendela.document.write('<p style="font:16px sans-serif;padding:20px">Menyiapkan file semua mapel untuk ' + esc(x.nama) + '… (bisa 1-2 menit)</p>'); } catch (e) {} }
+    var t0 = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = 'Menyiapkan…'; }
+    siapkanGab(x, pks).then(function (items) {
+      if (!items.length) throw new Error('Siswa ini belum menyelesaikan paket yang dipilih.');
+      var url = urlWA(wa, pesanGab(x, items)); tandaiGab(x, items);
+      if (jendela && !jendela.closed) jendela.location.href = url; else dialogBuka(url, x);
+    }).catch(function (e) {
+      if (jendela) try { jendela.close(); } catch (z) {}
+      toast(e && e.message ? e.message : 'Gagal menyiapkan file.');
+    }).then(function () { if (btn) { btn.disabled = false; btn.textContent = t0; } if (selesai) selesai(); });
+  }
+
+  /** Kirim semua mapel sekaligus untuk banyak siswa (1 pesan per orang tua). */
+  function massalGab() {
+    var paket = (D.paket_list || []).filter(function (p) { return p.status !== 'draf' && p.status !== 'arsip'; });
+    if (!paket.length) { toast('Belum ada paket yang bisa dikirim.'); return; }
+    var aktif = pakGab();
+    var cb = paket.map(function (p) { return '<label style="display:inline-block;margin:0 14px 6px 0;font-size:14px"><input type="checkbox" data-gp="' + esc(p.pk) + '"' + (aktif.indexOf(p.pk) >= 0 ? ' checked' : '') + '> <b>' + esc(p.mapel || p.pk) + '</b> <span class="small">' + esc(p.pk) + ' · ' + p.n_selesai + ' selesai</span></label>'; }).join('');
+    var d = modal('<h3 style="margin:0 0 4px">Kirim semua mapel ke orang tua (1 pesan)</h3><p class="small" style="margin:0 0 8px">Tiap orang tua menerima <b>satu pesan WhatsApp</b> berisi hasil semua mapel yang dicentang di bawah' + (filterKelas ? ' (kelas ' + esc(filterKelas) + ')' : '') + '. Langkah 1: <b>Siapkan semua file</b> (bisa beberapa menit; jangan tutup jendela ini). Langkah 2: tekan <b>Kirim</b> pada tiap siswa.</p>' +
+      '<div style="margin-bottom:6px">' + cb + '</div>' +
+      '<div class="row"><button class="btn" id="m-siap">Siapkan semua file</button><span class="small" id="m-prog"></span><span style="flex:1"></span><button class="btn line" id="m-x">Tutup</button></div>' +
+      '<div class="tw" style="max-height:48vh;overflow:auto"><table class="t"><tr><th>No</th><th>Nama</th><th>Kelas</th><th>WA ortu</th><th>Mapel selesai</th><th>Status</th><th></th></tr><tbody id="m-body"></tbody></table></div>');
+    function pksNow() { gabPks = $$('[data-gp]', d).filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.gp; }); return pakGab(); }
+    function daftarG() {
+      var pks = pakGab();
+      return ((D.riwayat && D.riwayat.siswa) || []).filter(function (x) { return (!filterKelas || x.kelas === filterKelas) && pks.some(function (pk) { return x.nilai[pk] != null; }); })
+        .sort(function (a, b) { return (a.kelas + a.nama) < (b.kelas + b.nama) ? -1 : 1; });
+    }
+    function status(x) {
+      var pks = pakGab(), ada = pks.filter(function (pk) { return x.nilai[pk] != null; });
+      if (!x.wa) return '<span class="tag b">Belum ada nomor</span>';
+      if (ada.length && ada.every(function (pk) { return TERKIRIM[pk + '|' + x.nisn]; })) return '<span class="tag ok">✓ sudah dibuka</span>';
+      var it = gabSiap(x, pks); if (it && it.length) return '<span class="tag ok">File siap</span>';
+      return '<span class="tag">Belum disiapkan</span>';
+    }
+    function gambar() {
+      var L = daftarG(), pks = pakGab();
+      $('#m-body', d).innerHTML = L.length ? L.map(function (x, i) {
+        var n = pks.filter(function (pk) { return x.nilai[pk] != null; }).length;
+        return '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + (x.wa ? esc(waTampil(x.wa)) : '<button class="btn sm line" data-mw="' + esc(x.nisn) + '">+ Nomor</button>') + '</td><td>' + n + ' dari ' + pks.length + '</td><td id="m-st-' + esc(x.nisn) + '">' + status(x) + '</td><td>' + (x.wa ? '<button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" data-mk="' + esc(x.nisn) + '">Kirim</button>' : '') + '</td></tr>';
+      }).join('') : '<tr><td colspan="7" class="small">Belum ada siswa yang menyelesaikan paket terpilih.</td></tr>';
+      $$('[data-mk]', d).forEach(function (b) {
+        b.onclick = function () {
+          var x = L.filter(function (z) { return z.nisn === b.dataset.mk; })[0];
+          kirimGab(x, pakGab(), b, function () { var c = $('#m-st-' + x.nisn); if (c) c.innerHTML = status(x); });
+        };
+      });
+      $$('[data-mw]', d).forEach(function (b) {
+        b.onclick = function () { var x = L.filter(function (z) { return z.nisn === b.dataset.mw; })[0]; ubahWA(x).then(function () { if ($('#g-modal')) gambar(); }); };
+      });
+    }
+    function st(nisn, html) { var c = $('#m-st-' + nisn); if (c) c.innerHTML = html; }
+    $$('[data-gp]', d).forEach(function (c) { c.onchange = function () { pksNow(); gambar(); }; });
+    gambar();
+    $('#m-x', d).onclick = function () { tutupModal(); muat().catch(function () {}); };
+    $('#m-siap', d).onclick = function () {
+      var btn = this, pks = pksNow(), antri = daftarG().filter(function (x) { return x.wa && !gabSiap(x, pks); }), i = 0, gagal = 0;
+      if (!pks.length) { toast('Centang minimal satu mapel.'); return; }
+      if (!antri.length) { toast('Semua file sudah siap.'); return; }
+      btn.disabled = true;
+      (function lanjut() {
+        if (!$('#g-modal')) return;
+        if (i >= antri.length) { btn.disabled = false; $('#m-prog').textContent = gagal ? 'Selesai, ' + gagal + ' gagal. Tekan lagi untuk mengulang yang gagal.' : 'Semua file siap. Tekan Kirim pada tiap siswa.'; return; }
+        var x = antri[i++]; $('#m-prog').textContent = 'Menyiapkan ' + i + ' dari ' + antri.length + ' siswa…'; st(x.nisn, '<span class="tag w">Menyiapkan…</span>');
+        siapkanGab(x, pks).then(function () { st(x.nisn, status(x)); lanjut(); }).catch(function (e) {
+          gagal++; st(x.nisn, '<span class="tag b" title="' + esc(e && e.message) + '">Gagal</span>');
+          if (e && /Drive|PIN|server/i.test(e.message || '')) { btn.disabled = false; $('#m-prog').textContent = e.message; return; }
+          lanjut();
+        });
+      })();
+    };
+  }
   function unduhCSV(arr) {
     var head = ['No', 'Nama', 'Kelas', 'NISN', 'Status', 'Nilai', 'Durasi_menit', 'Keluar_layar', 'Kode'].concat(D.soal.map(function (q) { return 'S' + q.no; }));
     var L = [head];
@@ -385,7 +534,7 @@
     h += '<div class="stat" style="margin-bottom:12px"><b>Hitung ulang nilai paket ' + esc(PK) + '</b><span>Pakai bila kunci jawaban paket ini di sheet "Soal" diperbaiki setelah ada siswa yang selesai. Hanya paket ini yang dihitung ulang.</span><div style="height:10px"></div><button class="btn sm sec" id="a-hitung">Hitung ulang nilai paket ini</button></div>';
     h += '<div class="stat"><b>Soal, siswa, PIN, KKM umum</b><span>Diatur di Google Sheet: sheet <b>Soal</b> (kolom <code>paket</code> = kode paket), <b>Siswa</b>, <b>Pengaturan</b>. Gambar soal diunggah ke folder <code>gambar/</code> di GitHub. Lihat README.</span></div>';
     $('#t-atur').innerHTML = h;
-    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa pada paket ' + PK + ' dengan kunci saat ini?')) return; linkCache = {}; api('guru_hitung_ulang', { pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
+    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa pada paket ' + PK + ' dengan kunci saat ini?')) return; linkCache = {}; DPK = {}; api('guru_hitung_ulang', { pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
   }
 
   /* ---------- paket ---------- */
