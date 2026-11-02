@@ -183,6 +183,7 @@
 
       footer(doc, W, H, judul + '  |  ' + (D.pengaturan.pk || ''));
       var nama = opsi.namaFile || ('hasil-' + (D.pengaturan.pk || 'paket').toLowerCase() + '-' + (daftar.length === 1 ? slug(daftar[0].nama) : 'semua') + '-' + tgl() + '.pdf');
+      if (opsi.kembalikan) return { nama: nama, base64: doc.output('datauristring').split(',')[1] }; // untuk diunggah ke Drive (kirim WA)
       doc.save(nama);
       return nama;
     });
@@ -517,6 +518,7 @@
 
       footer(doc, W, H, judul + '  |  Peta Belajar ' + (D.pengaturan.pk || ''));
       var nama = opsi.namaFile || ('peta-belajar-' + (D.pengaturan.pk || 'paket').toLowerCase() + '-' + (daftar.length === 1 ? slug(daftar[0].nama) : 'semua') + '-' + tgl() + '.pdf');
+      if (opsi.kembalikan) return { nama: nama, base64: doc.output('datauristring').split(',')[1] }; // untuk diunggah ke Drive (kirim WA)
       doc.save(nama);
       return nama;
     });
