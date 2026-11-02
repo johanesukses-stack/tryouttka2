@@ -12,6 +12,8 @@
 
   var D = null, PIN = '', PK = '', tab = 'paket', auto = 0, urut = { k: 'nilai', d: -1 }, filterKelas = '';
   var modePDF = 'lengkap';
+  var modeWA = 'keduanya', linkCache = {}, TERKIRIM = {};
+  try { TERKIRIM = JSON.parse(localStorage.getItem('g_wa_kirim') || '{}') || {}; } catch (e) { TERKIRIM = {}; }
 
   function api(action, data) {
     if (!C.API_URL) return Promise.reject(new Error('Alamat server belum diatur (js/config.js).'));
@@ -41,7 +43,7 @@
     muat().then(function () { try { sessionStorage.setItem('g_pin', PIN); } catch (x) {} }).catch(function (er) { m.hidden = false; m.textContent = er.message; });
   };
   $('#g-out').onclick = function () { try { sessionStorage.removeItem('g_pin'); } catch (x) {} location.reload(); };
-  $('#g-ref').onclick = function () { muat().then(function () { toast('Data diperbarui'); }).catch(function (e) { toast(e.message); }); };
+  $('#g-ref').onclick = function () { linkCache = {}; muat().then(function () { toast('Data diperbarui'); }).catch(function (e) { toast(e.message); }); };
   $$('#g-tabs button').forEach(function (b) { b.onclick = function () { gantiTab(b.dataset.t); }; });
   $('#g-pk').onchange = function () { PK = this.value; muat().catch(function (e) { toast(e.message); }); };
 
@@ -99,12 +101,13 @@
     var h = '<div class="cards"><div class="stat"><b>' + done.length + '/' + rows.length + '</b><span>Sudah selesai</span></div><div class="stat"><b>' + (nil.length ? num(avg) : '-') + '</b><span>Rata-rata</span></div><div class="stat"><b>' + (nil.length ? num(Math.max.apply(null, nil)) : '-') + '</b><span>Tertinggi</span></div><div class="stat"><b>' + (nil.length ? num(Math.min.apply(null, nil)) : '-') + '</b><span>Terendah</span></div><div class="stat"><b>' + nil.filter(function (v) { return v >= kkm; }).length + '</b><span>Tuntas (≥ ' + kkm + ')</span></div></div>';
     h += '<div class="row"><select id="f-kelas">' + kelasOpt() + '</select><button class="btn sm" id="b-csv">Unduh Excel</button><button class="btn sm sec" id="b-print">Cetak</button><button class="btn sm line" id="b-sheet">Perbarui sheet paket ini</button></div>';
     h += '<div class="row noprint"><b style="font-size:14px">PDF jawaban siswa:</b><select id="f-mode"><option value="lengkap"' + (modePDF === 'lengkap' ? ' selected' : '') + '>Lengkap (soal + gambar + pembahasan)</option><option value="ringkas"' + (modePDF === 'ringkas' ? ' selected' : '') + '>Ringkas (tabel jawaban &amp; kunci)</option></select><button class="btn sm" id="b-pdfall">Unduh PDF semua siswa' + (filterKelas ? ' kelas ' + esc(filterKelas) : '') + '</button></div><div class="row noprint"><b style="font-size:14px">Peta belajar (insight per anak):</b><button class="btn sm sec" id="b-petaall">Unduh Peta Belajar semua siswa' + (filterKelas ? ' kelas ' + esc(filterKelas) : '') + ' (PDF)</button></div><p class="small noprint" style="margin-top:-4px">Peta Belajar: materi yang sudah dikuasai dan yang perlu diperkuat, plus panduan untuk guru, orang tua, dan siswa. Satu siswa = 1-2 halaman. Tombol "Peta" ada di tiap baris. Isi jawaban yang dipilih siswa, kunci yang benar, dan skor tiap soal. Untuk satu siswa, pakai tombol PDF di barisnya. Mode Lengkap + semua siswa menghasilkan file besar; pilih Ringkas bila ingin cepat.</p>';
+    h += toolbarWA(rows);
     var arr = rows.map(function (x) { var r = hm[x.nisn]; return { x: x, r: r, nilai: x.nilai == null ? -1 : x.nilai }; });
     arr.sort(function (a, b) { var k = urut.k; var va = k === 'nama' ? a.x.nama : k === 'kelas' ? a.x.kelas + a.x.nama : a.nilai, vb = k === 'nama' ? b.x.nama : k === 'kelas' ? b.x.kelas + b.x.nama : b.nilai; return (va > vb ? 1 : va < vb ? -1 : 0) * urut.d; });
-    h += '<div class="tw"><table class="t"><tr><th>No</th><th class="s" data-s="nama">Nama</th><th class="s" data-s="kelas">Kelas</th><th>NISN</th><th class="s n" data-s="nilai">Nilai ▾</th><th class="n">Durasi</th><th class="n">Keluar</th><th>Kode</th><th>Ket.</th><th class="noprint"></th></tr>';
+    h += '<div class="tw"><table class="t"><tr><th>No</th><th class="s" data-s="nama">Nama</th><th class="s" data-s="kelas">Kelas</th><th>NISN</th><th class="s n" data-s="nilai">Nilai ▾</th><th class="n">Durasi</th><th class="n">Keluar</th><th>Kode</th><th>Ket.</th><th class="noprint">WA Ortu</th><th class="noprint"></th></tr>';
     arr.forEach(function (o, i) {
       var x = o.x, r = o.r, ket = x.nilai == null ? '<span class="tag">' + (x.status === 'berlangsung' ? 'Mengerjakan' : 'Belum') + '</span>' : (x.nilai >= kkm ? '<span class="tag ok">Tuntas</span>' : '<span class="tag b">Belum tuntas</span>') + (r && r.terlambat ? ' <span class="tag w">Terlambat</span>' : '');
-      h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + esc(x.nisn) + '</td><td class="n"><b>' + (x.nilai != null ? num(x.nilai) : '') + '</b></td><td class="n">' + (r ? num(r.durasi_menit) + ' mnt' : '') + '</td><td class="n">' + (r ? r.keluar : '') + '</td><td>' + (r ? esc(r.kode) : '') + '</td><td>' + ket + '</td><td class="noprint">' + (r ? '<button class="btn sm line" data-pdf="' + esc(x.nisn) + '">PDF</button> <button class="btn sm line" data-peta="' + esc(x.nisn) + '">Peta</button>' : '') + '</td></tr>';
+      h += '<tr><td>' + (i + 1) + '</td><td>' + esc(x.nama) + '</td><td>' + esc(x.kelas) + '</td><td>' + esc(x.nisn) + '</td><td class="n"><b>' + (x.nilai != null ? num(x.nilai) : '') + '</b></td><td class="n">' + (r ? num(r.durasi_menit) + ' mnt' : '') + '</td><td class="n">' + (r ? r.keluar : '') + '</td><td>' + (r ? esc(r.kode) : '') + '</td><td>' + ket + '</td><td class="noprint">' + waSel(x) + '</td><td class="noprint" style="white-space:nowrap">' + (r ? '<button class="btn sm line" data-pdf="' + esc(x.nisn) + '">PDF</button> <button class="btn sm line" data-peta="' + esc(x.nisn) + '">Peta</button> <button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" data-wa="' + esc(x.nisn) + '">Kirim WA</button>' : '') + '</td></tr>';
     });
     $('#t-rekap').innerHTML = h + '</table></div>';
     $('#f-kelas').onchange = function () { filterKelas = this.value; rRekap(); };
@@ -135,6 +138,191 @@
     };
     $('#b-csv').onclick = function () { jalankan(this, function () { return window.UjianExcel.rekapNilai(D, arr, { kelas: filterKelas }); }, 'Excel'); };
     $('#b-sheet').onclick = function () { api('guru_tulis_sheet', { pk: PK }).then(function (r) { toast(r.ok ? 'Sheet "Rekap ' + PK + '" & "Analisis ' + PK + '" diperbarui' : r.error); }).catch(function (e) { toast(e.message); }); };
+
+    /* ---- WhatsApp orang tua ---- */
+    $('#f-wa').onchange = function () { modeWA = this.value; };
+    $$('[data-wa]', $('#t-rekap')).forEach(function (b) {
+      b.onclick = function () {
+        var o = arr.filter(function (z) { return z.x.nisn === b.dataset.wa; })[0];
+        kirimWA(o.x, o.r, b, function () { if (tab === 'rekap') rRekap(); });
+      };
+    });
+    $$('[data-waedit]', $('#t-rekap')).forEach(function (b) {
+      b.onclick = function () { var x = D.siswa.filter(function (z) { return z.nisn === b.dataset.waedit; })[0]; ubahWA(x).then(function () { rRekap(); }); };
+    });
+    $('#b-wamassal').onclick = function () { massal(arr); };
+    $('#b-watpl').onclick = function () { jalankan(this, function () { return window.UjianExcel.templateWA(D); }, 'Template'); };
+    $('#b-waup').onclick = function () { $('#i-waup').click(); };
+    $('#i-waup').onchange = function () {
+      var f = this.files[0]; this.value = ''; if (!f) return;
+      toast('Membaca file…');
+      window.UjianExcel.bacaWA(f).then(function (rows2) {
+        if (!rows2.length) throw new Error('Tidak ada nomor yang terisi di file.');
+        return api('guru_wa_simpan', { data: rows2 });
+      }).then(function (r) {
+        if (!r.ok) throw new Error(r.error || 'Gagal menyimpan.');
+        return muat().then(function () {
+          toast(r.tersimpan + ' nomor tersimpan' + (r.salah.length ? ', ' + r.salah.length + ' tidak valid' : ''));
+          var p = [];
+          if (r.salah.length) p.push('Nomor tidak valid (perbaiki lalu unggah ulang):\n' + r.salah.slice(0, 15).join('\n') + (r.salah.length > 15 ? '\n…' : ''));
+          if (r.tidak_ditemukan.length) p.push('NISN tidak ada di sheet Siswa:\n' + r.tidak_ditemukan.slice(0, 15).join('\n'));
+          if (p.length) alert(p.join('\n\n'));
+        });
+      }).catch(function (e) { toast(e && e.message ? e.message : 'Gagal membaca file.'); });
+    };
+  }
+
+  /* ---------- kirim ke WhatsApp orang tua ----------
+     Alur: PDF dibuat di browser -> diunggah ke Google Drive guru (tautan "siapa saja yang punya tautan")
+     -> WhatsApp dibuka ke nomor orang tua dengan pesan berisi tautan -> guru menekan Kirim. */
+  function waNorm(v) {
+    var s = String(v == null ? '' : v).split(/[\/,;]/)[0].replace(/\D/g, '');
+    if (!s) return '';
+    if (s.indexOf('62') !== 0) { if (s.charAt(0) === '0') s = '62' + s.slice(1); else if (s.charAt(0) === '8') s = '62' + s; }
+    return /^62\d{8,13}$/.test(s) ? s : '';
+  }
+  function waTampil(w) { return w ? '0' + String(w).replace(/^62/, '') : ''; }
+  function waSel(x) {
+    var k = PK + '|' + x.nisn, t = TERKIRIM[k], d = t ? new Date(t) : null;
+    var tag = d ? ' <span class="tag ok" title="WhatsApp sudah dibuka untuk siswa ini (' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ')">✓ dibuka</span>' : '';
+    return (x.wa ? '<span style="white-space:nowrap">' + esc(waTampil(x.wa)) + '</span> <button class="btn sm line" data-waedit="' + esc(x.nisn) + '" title="Ubah nomor">✎</button>' : '<button class="btn sm line" data-waedit="' + esc(x.nisn) + '">+ Nomor</button>') + tag;
+  }
+  function toolbarWA(rows) {
+    var ada = rows.filter(function (x) { return x.wa; }).length;
+    return '<div class="row noprint"><b style="font-size:14px">Kirim ke orang tua (WhatsApp):</b><select id="f-wa"><option value="keduanya"' + (modeWA === 'keduanya' ? ' selected' : '') + '>PDF jawaban + Peta Belajar</option><option value="peta"' + (modeWA === 'peta' ? ' selected' : '') + '>Hanya Peta Belajar</option><option value="hasil"' + (modeWA === 'hasil' ? ' selected' : '') + '>Hanya PDF jawaban</option></select>' +
+      '<button class="btn sm" id="b-wamassal">Kirim massal…</button><button class="btn sm line" id="b-watpl">Unduh template nomor WA</button><button class="btn sm line" id="b-waup">Unggah nomor WA</button><input type="file" id="i-waup" accept=".xlsx,.csv" hidden></div>' +
+      '<p class="small noprint" style="margin-top:-4px">Nomor WA terisi: <b>' + ada + '</b> dari ' + rows.length + ' siswa. Klik <b>Kirim WA</b> pada baris siswa: file dibuat, disimpan ke Google Drive, lalu WhatsApp terbuka ke nomor orang tua dengan pesan berisi tautan. Tinggal tekan Kirim di WhatsApp.</p>';
+  }
+  function pilihJenis() { return modeWA === 'keduanya' ? ['hasil', 'peta'] : [modeWA]; }
+  function kunciLink(rec, j) { return PK + '|' + rec.nisn + '|' + j + '|' + (j === 'hasil' ? modePDF : ''); }
+  function linkSiap(rec) {
+    var out = {}, ok = true;
+    pilihJenis().forEach(function (j) { var u = linkCache[kunciLink(rec, j)]; if (u) out[j] = u; else ok = false; });
+    return ok ? out : null;
+  }
+  function siapkanLink(rec, jenis) {
+    var key = kunciLink(rec, jenis);
+    if (linkCache[key]) return Promise.resolve(linkCache[key]);
+    var buat = jenis === 'peta' ? window.UjianPDF.petaPDF(D, [rec], { kembalikan: true }) : window.UjianPDF.hasilPDF(D, [rec], { mode: modePDF, gambarDir: C.GAMBAR_DIR, kembalikan: true });
+    return Promise.resolve(buat).then(function (f) { return api('guru_unggah', { pk: PK, nisn: rec.nisn, jenis: jenis, base64: f.base64 }); })
+      .then(function (r) { if (!r.ok) throw new Error(r.error || 'Gagal mengunggah file.'); linkCache[key] = r.url; return r.url; });
+  }
+  function siapkanSemuaLink(rec) {
+    return pilihJenis().reduce(function (p, j) { return p.then(function () { return siapkanLink(rec, j); }); }, Promise.resolve()).then(function () { return linkSiap(rec); });
+  }
+  function pesanWA(x, rec, links) {
+    var P = D.pengaturan, nilai = rec && rec.nilai != null ? rec.nilai : x.nilai;
+    var v = { nama: x.nama, kelas: x.kelas, nilai: num(nilai), ket: nilai >= P.kkm ? 'Tuntas' : 'Belum tuntas, KKM ' + P.kkm, judul: P.judul, paket: P.paket || P.pk, link_hasil: links.hasil || '', link_peta: links.peta || '' };
+    var tpl = String(P.pesan_wa || '').replace(/\\n/g, '\n');
+    if (!tpl) {
+      var L = ["Assalamu'alaikum Bapak/Ibu, wali murid dari *{nama}* (kelas {kelas}).", '', 'Berikut hasil {judul}', '{paket}', 'Nilai: *{nilai}* ({ket})'];
+      if (links.hasil) L.push('', '📄 PDF jawaban & pembahasan:', '{link_hasil}');
+      if (links.peta) L.push('', '🧭 Peta Belajar (materi yang sudah kuat dan yang perlu diperkuat):', '{link_peta}');
+      L.push('', 'Mohon Ananda didampingi belajar di rumah. Terima kasih.');
+      tpl = L.join('\n');
+    }
+    return tpl.replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }).replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function urlWA(wa, pesan) { return 'https://wa.me/' + wa + '?text=' + encodeURIComponent(pesan); }
+  function tandai(x) { TERKIRIM[PK + '|' + x.nisn] = Date.now(); try { localStorage.setItem('g_wa_kirim', JSON.stringify(TERKIRIM)); } catch (e) {} }
+
+  function setWA(x, w) { // perbarui salinan lokal
+    x.wa = w;
+    ((D.riwayat && D.riwayat.siswa) || []).forEach(function (z) { if (z.nisn === x.nisn) z.wa = w; });
+  }
+  function ubahWA(x) { // tanya nomor (sinkron) lalu simpan ke sheet
+    var v = prompt('Nomor WhatsApp orang tua/wali dari ' + x.nama + '\n(contoh 081234567890; kosongkan untuk menghapus):', waTampil(x.wa));
+    if (v === null) return Promise.resolve('');
+    if (String(v).trim() === '') {
+      setWA(x, ''); return api('guru_wa_simpan', { data: [{ nisn: x.nisn, wa: '', hapus: true }] }).then(function () { toast('Nomor dihapus'); return ''; }).catch(function (e) { toast(e.message); return ''; });
+    }
+    var w = waNorm(v); if (!w) { toast('Nomor tidak valid. Contoh: 081234567890'); return Promise.resolve(''); }
+    setWA(x, w);
+    return api('guru_wa_simpan', { data: [{ nisn: x.nisn, wa: w }] }).then(function (r) { toast(r.ok ? 'Nomor tersimpan' : r.error); return w; }).catch(function (e) { toast(e.message); return w; });
+  }
+  function tanyaWA(x) { // sinkron (agar jendela WA tidak diblokir browser)
+    var v = prompt('Nomor WhatsApp orang tua/wali dari ' + x.nama + ' belum ada.\nIsi nomornya (contoh 081234567890):', '');
+    if (v === null) return '';
+    var w = waNorm(v); if (!w) { toast('Nomor tidak valid. Contoh: 081234567890'); return ''; }
+    setWA(x, w); api('guru_wa_simpan', { data: [{ nisn: x.nisn, wa: w }] }).catch(function () {});
+    return w;
+  }
+
+  function modal(html) {
+    tutupModal();
+    var d = document.createElement('div'); d.className = 'modal-bg'; d.id = 'g-modal';
+    d.innerHTML = '<div class="modal">' + html + '</div>';
+    d.onclick = function (e) { if (e.target === d) tutupModal(); };
+    document.body.appendChild(d); return d;
+  }
+  function tutupModal() { var m = $('#g-modal'); if (m) m.remove(); }
+  function dialogBuka(url, x) {
+    var d = modal('<h3 style="margin:0 0 8px">Pesan untuk orang tua ' + esc(x.nama) + ' sudah siap</h3><p class="small">Browser menahan jendela baru. Tekan tombol di bawah untuk membuka WhatsApp.</p><p><a class="btn" href="' + esc(url) + '" target="_blank" rel="noopener" id="m-buka">Buka WhatsApp</a> <button class="btn line" id="m-tutup">Tutup</button></p>');
+    $('#m-tutup', d).onclick = tutupModal; $('#m-buka', d).onclick = function () { setTimeout(tutupModal, 300); };
+  }
+
+  /** Satu siswa: siapkan file -> buka WhatsApp. Dipanggil langsung dari klik tombol. */
+  function kirimWA(x, rec, btn, selesai) {
+    if (!rec) { toast('Siswa ini belum selesai mengerjakan.'); return; }
+    var wa = x.wa;
+    if (!wa) { wa = tanyaWA(x); if (!wa) return; }
+    var cache = linkSiap(rec);
+    if (cache) { // file sudah pernah disiapkan: buka langsung
+      window.open(urlWA(wa, pesanWA(x, rec, cache)), '_blank'); tandai(x); if (selesai) selesai(); return;
+    }
+    var jendela = window.open('', '_blank');
+    if (jendela) { try { jendela.document.write('<p style="font:16px sans-serif;padding:20px">Menyiapkan file untuk ' + esc(x.nama) + '…</p>'); } catch (e) {} }
+    var t0 = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = 'Menyiapkan…'; }
+    siapkanSemuaLink(rec).then(function (links) {
+      var url = urlWA(wa, pesanWA(x, rec, links)); tandai(x);
+      if (jendela && !jendela.closed) jendela.location.href = url; else dialogBuka(url, x);
+    }).catch(function (e) {
+      if (jendela) try { jendela.close(); } catch (z) {}
+      toast(e && e.message ? e.message : 'Gagal menyiapkan file.');
+    }).then(function () { if (btn) { btn.disabled = false; btn.textContent = t0; } if (selesai) selesai(); });
+  }
+
+  /** Kirim massal: (1) siapkan semua file sekali jalan, (2) tekan Kirim per siswa (WhatsApp langsung terbuka). */
+  function massal(arr) {
+    var daftar = arr.filter(function (o) { return o.r; });
+    if (!daftar.length) { toast('Belum ada siswa yang selesai mengerjakan.'); return; }
+    var ket = { keduanya: 'PDF jawaban + Peta Belajar', peta: 'Peta Belajar', hasil: 'PDF jawaban' }[modeWA];
+    var d = modal('<h3 style="margin:0 0 4px">Kirim ke orang tua (WhatsApp)</h3><p class="small" style="margin:0 0 10px">Isi pesan: <b>' + ket + '</b>' + (filterKelas ? ' · kelas ' + esc(filterKelas) : '') + '. Langkah 1: <b>Siapkan semua file</b> (dibuat dan disimpan ke Google Drive). Langkah 2: tekan <b>Kirim</b> pada tiap siswa; WhatsApp terbuka dengan pesan siap kirim.</p>' +
+      '<div class="row"><button class="btn" id="m-siap">Siapkan semua file</button><span class="small" id="m-prog"></span><span style="flex:1"></span><button class="btn line" id="m-x">Tutup</button></div>' +
+      '<div class="tw" style="max-height:52vh;overflow:auto"><table class="t"><tr><th>No</th><th>Nama</th><th>Kelas</th><th>WA ortu</th><th>Status</th><th></th></tr><tbody id="m-body"></tbody></table></div>');
+    function status(o) { var k = PK + '|' + o.x.nisn; if (!o.x.wa) return '<span class="tag b">Belum ada nomor</span>'; if (TERKIRIM[k]) return '<span class="tag ok">✓ sudah dibuka</span>'; if (linkSiap(o.r)) return '<span class="tag ok">File siap</span>'; return '<span class="tag">Belum disiapkan</span>'; }
+    function gambar() {
+      $('#m-body', d).innerHTML = daftar.map(function (o, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + esc(o.x.nama) + '</td><td>' + esc(o.x.kelas) + '</td><td>' + (o.x.wa ? esc(waTampil(o.x.wa)) : '<button class="btn sm line" data-mw="' + esc(o.x.nisn) + '">+ Nomor</button>') + '</td><td id="m-st-' + esc(o.x.nisn) + '">' + status(o) + '</td><td>' + (o.x.wa ? '<button class="btn sm" style="background:var(--ok);border-color:var(--ok);color:#fff" data-mk="' + esc(o.x.nisn) + '">Kirim</button>' : '') + '</td></tr>';
+      }).join('');
+      $$('[data-mk]', d).forEach(function (b) {
+        b.onclick = function () {
+          var o = daftar.filter(function (z) { return z.x.nisn === b.dataset.mk; })[0];
+          kirimWA(o.x, o.r, b, function () { var c = $('#m-st-' + o.x.nisn); if (c) c.innerHTML = status(o); });
+        };
+      });
+      $$('[data-mw]', d).forEach(function (b) {
+        b.onclick = function () { var o = daftar.filter(function (z) { return z.x.nisn === b.dataset.mw; })[0]; ubahWA(o.x).then(function () { if ($('#g-modal')) gambar(); }); };
+      });
+    }
+    function st(nisn, html) { var c = $('#m-st-' + nisn); if (c) c.innerHTML = html; }
+    gambar();
+    $('#m-x', d).onclick = function () { tutupModal(); if (tab === 'rekap') rRekap(); };
+    $('#m-siap', d).onclick = function () {
+      var btn = this, antri = daftar.filter(function (o) { return o.x.wa && !linkSiap(o.r); }), i = 0, gagal = 0;
+      if (!antri.length) { toast('Semua file sudah siap.'); return; }
+      btn.disabled = true;
+      (function lanjut() {
+        if (!$('#g-modal')) return;
+        if (i >= antri.length) { btn.disabled = false; $('#m-prog').textContent = gagal ? 'Selesai, ' + gagal + ' gagal. Tekan lagi untuk mengulang yang gagal.' : 'Semua file siap. Tekan Kirim pada tiap siswa.'; return; }
+        var o = antri[i++]; $('#m-prog').textContent = 'Menyiapkan ' + i + ' dari ' + antri.length + '…'; st(o.x.nisn, '<span class="tag w">Menyiapkan…</span>');
+        siapkanSemuaLink(o.r).then(function () { st(o.x.nisn, status(o)); lanjut(); }).catch(function (e) {
+          gagal++; st(o.x.nisn, '<span class="tag b" title="' + esc(e && e.message) + '">Gagal</span>');
+          if (e && /Drive|PIN|server/i.test(e.message || '')) { btn.disabled = false; $('#m-prog').textContent = e.message; return; }
+          lanjut();
+        });
+      })();
+    };
   }
   function unduhCSV(arr) {
     var head = ['No', 'Nama', 'Kelas', 'NISN', 'Status', 'Nilai', 'Durasi_menit', 'Keluar_layar', 'Kode'].concat(D.soal.map(function (q) { return 'S' + q.no; }));
@@ -197,7 +385,7 @@
     h += '<div class="stat" style="margin-bottom:12px"><b>Hitung ulang nilai paket ' + esc(PK) + '</b><span>Pakai bila kunci jawaban paket ini di sheet "Soal" diperbaiki setelah ada siswa yang selesai. Hanya paket ini yang dihitung ulang.</span><div style="height:10px"></div><button class="btn sm sec" id="a-hitung">Hitung ulang nilai paket ini</button></div>';
     h += '<div class="stat"><b>Soal, siswa, PIN, KKM umum</b><span>Diatur di Google Sheet: sheet <b>Soal</b> (kolom <code>paket</code> = kode paket), <b>Siswa</b>, <b>Pengaturan</b>. Gambar soal diunggah ke folder <code>gambar/</code> di GitHub. Lihat README.</span></div>';
     $('#t-atur').innerHTML = h;
-    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa pada paket ' + PK + ' dengan kunci saat ini?')) return; api('guru_hitung_ulang', { pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
+    $('#a-hitung').onclick = function () { if (!confirm('Hitung ulang nilai semua siswa pada paket ' + PK + ' dengan kunci saat ini?')) return; linkCache = {}; api('guru_hitung_ulang', { pk: PK }).then(function (r) { if (!r.ok) throw new Error(r.error); return muat().then(function () { toast(r.jumlah + ' hasil dihitung ulang'); }); }).catch(function (e) { toast(e.message); }); };
   }
 
   /* ---------- paket ---------- */
