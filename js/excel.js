@@ -363,5 +363,90 @@
     });
   }
 
-  root.UjianExcel = { rekapNilai: rekapNilai, riwayat: riwayat, rekapNomor: rekapNomor, rekapMateri: rekapMateri, unduh: unduh, BATAS_RENDAH: BATAS_RENDAH, BATAS_BAIK: BATAS_BAIK };
+  /* ---------- Template & unggah nomor WA orang tua ---------- */
+  function templateWA(D) {
+    var R = D.riwayat, daftar = (R && R.siswa ? R.siswa : D.siswa).slice().sort(urutSiswa);
+    if (!daftar.length) return Promise.reject(new Error('Belum ada data siswa.'));
+    return muat().then(function () {
+      var wb = new root.ExcelJS.Workbook(); wb.creator = D.pengaturan.judul || 'Ujian Online'; wb.created = new Date();
+      var ws = wb.addWorksheet('WA Orang Tua', { views: [{ state: 'frozen', ySplit: 1 }] });
+      ws.columns = [{ header: 'nisn', width: 16 }, { header: 'nama', width: 34 }, { header: 'kelas', width: 9 }, { header: 'wa_ortu', width: 24 }];
+      kepala(ws.getRow(1)); ws.getRow(1).height = 24;
+      var abu = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }, kuning = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } };
+      daftar.forEach(function (x, i) {
+        var r = ws.addRow([x.nisn, x.nama, x.kelas, x.wa ? '0' + String(x.wa).replace(/^62/, '') : '']);
+        [1, 2, 3].forEach(function (c) { r.getCell(c).fill = abu; r.getCell(c).font = { color: { argb: 'FF475569' } }; });
+        r.getCell(4).fill = kuning;
+        [1, 4].forEach(function (c) { r.getCell(c).numFmt = '@'; });
+      });
+      kotak(ws, 1, daftar.length + 1, 1, 4);
+      var pt = wb.addWorksheet('Petunjuk');
+      pt.columns = [{ width: 110 }];
+      ['PETUNJUK MENGISI NOMOR WA ORANG TUA',
+        '',
+        '1. Isi hanya kolom wa_ortu (sel kuning) pada sheet "WA Orang Tua". Kolom nisn, nama, dan kelas jangan diubah (dipakai untuk mencocokkan siswa).',
+        '2. Satu nomor per siswa. Boleh ditulis 081234567890, 6281234567890, atau +62 812-3456-7890; semuanya otomatis diseragamkan.',
+        '3. Jika Excel menghilangkan angka 0 di depan, tidak masalah; sistem tetap membacanya benar.',
+        '4. Baris yang wa_ortu-nya kosong dilewati (nomor lama tidak dihapus).',
+        '5. Simpan file (.xlsx atau .csv), lalu di halaman guru: Rekap Nilai > "Unggah nomor WA" > pilih file ini.',
+        '6. Nomor yang tidak valid akan ditampilkan setelah unggah agar bisa diperbaiki.'
+      ].forEach(function (t, i) { var c = pt.getCell(i + 1, 1); c.value = t; c.alignment = { wrapText: true, vertical: 'top' }; if (i === 0) c.font = { bold: true, size: 14, color: { argb: BRAND } }; });
+      return simpan(wb, 'template-nomor-wa-orang-tua-' + tgl() + '.xlsx');
+    });
+  }
+
+  function csvBaris(teks) { // pembaca CSV sederhana (pemisah , atau ;)
+    var pemisah = (teks.split('\n')[0].match(/;/g) || []).length > (teks.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+    var rows = [], row = [], cur = '', q = false;
+    for (var i = 0; i < teks.length; i++) {
+      var ch = teks.charAt(i);
+      if (q) { if (ch === '"') { if (teks.charAt(i + 1) === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === pemisah) { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && teks.charAt(i + 1) === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+      else cur += ch;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  function olahBarisWA(rows) { // rows: array of array teks; cari baris judul lalu ambil nisn + wa
+    var hi = -1, ni = -1, wi = -1;
+    for (var i = 0; i < Math.min(rows.length, 15) && hi < 0; i++) {
+      var h = rows[i].map(function (v) { return String(v == null ? '' : v).trim().toLowerCase(); });
+      var a = h.indexOf('nisn'), b = -1;
+      h.forEach(function (t, j) { if (b < 0 && /^(wa_ortu|wa|no\.? ?wa.*|whatsapp.*|hp.*|telepon.*|no\.? ?hp.*)$/.test(t)) b = j; });
+      if (a >= 0 && b >= 0) { hi = i; ni = a; wi = b; }
+    }
+    if (hi < 0) throw new Error('Kolom "nisn" dan "wa_ortu" tidak ditemukan. Pakai template yang diunduh dari halaman ini.');
+    var out = [];
+    for (var k = hi + 1; k < rows.length; k++) {
+      var nisn = String(rows[k][ni] == null ? '' : rows[k][ni]).replace(/\D/g, ''), wa = String(rows[k][wi] == null ? '' : rows[k][wi]).trim();
+      if (nisn && wa) out.push({ nisn: nisn, wa: wa });
+    }
+    return out;
+  }
+  /** file: objek File (.xlsx atau .csv). Hasil: [{nisn, wa}] */
+  function bacaWA(file) {
+    if (!file) return Promise.reject(new Error('Pilih file dahulu.'));
+    if (/\.csv$/i.test(file.name)) {
+      return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { try { res(olahBarisWA(csvBaris(String(fr.result).replace(/^\ufeff/, '')))); } catch (e) { rej(e); } }; fr.onerror = function () { rej(new Error('File tidak bisa dibaca.')); }; fr.readAsText(file); });
+    }
+    return muat().then(function () {
+      return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { rej(new Error('File tidak bisa dibaca.')); }; fr.readAsArrayBuffer(file); });
+    }).then(function (buf) {
+      var wb = new root.ExcelJS.Workbook();
+      return wb.xlsx.load(buf).then(function () {
+        var hasil = null, err = null;
+        wb.eachSheet(function (ws) {
+          if (hasil) return;
+          var rows = []; ws.eachRow({ includeEmpty: false }, function (row) { var a = []; row.eachCell({ includeEmpty: true }, function (c, n) { a[n - 1] = c.text != null ? c.text : c.value; }); rows.push(a); });
+          try { hasil = olahBarisWA(rows); } catch (e) { err = e; }
+        });
+        if (!hasil) throw err || new Error('File kosong.');
+        return hasil;
+      });
+    });
+  }
+
+  root.UjianExcel = { templateWA: templateWA, bacaWA: bacaWA, rekapNilai: rekapNilai, riwayat: riwayat, rekapNomor: rekapNomor, rekapMateri: rekapMateri, unduh: unduh, BATAS_RENDAH: BATAS_RENDAH, BATAS_BAIK: BATAS_BAIK };
 })(typeof window !== 'undefined' ? window : globalThis);
