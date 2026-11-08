@@ -551,7 +551,7 @@
       L.forEach(function (p) {
         var jad = p.jadwal_buka || p.jadwal_tutup ? esc(p.jadwal_buka || '…') + '<br>s.d. ' + esc(p.jadwal_tutup || '…') + (p.kontrol === 'jadwal' ? '' : '<br><span class="small">(manual)</span>') : '<span class="small">—</span>';
         var warn = p.n_soal ? (p.masalah.length ? '<br><span class="tag b" title="' + esc(p.masalah.join(' ')) + '">' + p.masalah.length + ' masalah soal</span>' : '') : '<br><span class="tag w">belum ada soal</span>';
-        h += '<tr' + (p.pk === PK ? ' style="background:var(--brand-l)"' : '') + '><td><b>' + esc(p.pk) + '</b></td><td>' + esc(p.mapel) + '<br><span class="small">' + esc(p.nama) + ' · ' + p.durasi_menit + ' mnt</span></td><td>' + tagKeadaan(p.keadaan) + (p.n_jalan ? '<br><span class="small">' + p.n_jalan + ' mengerjakan</span>' : '') + '</td><td class="small">' + jad + '</td><td>' + (esc(p.kelas) || 'Semua') + '</td><td class="n">' + p.n_soal + warn + '</td><td class="n">' + p.n_selesai + '/' + p.n_peserta + '</td><td class="n">' + (p.rata == null ? '' : num(p.rata)) + '</td><td class="noprint" style="white-space:nowrap">' +
+        h += '<tr' + (p.pk === PK ? ' style="background:var(--brand-l)"' : '') + '><td><b>' + esc(p.pk) + '</b></td><td>' + esc(p.mapel) + '<br><span class="small">' + esc(p.nama) + ' · ' + p.durasi_menit + ' mnt · soal ' + (p.acak_efektif === 'ya' ? 'acak' : 'urut') + '</span></td><td>' + tagKeadaan(p.keadaan) + (p.n_jalan ? '<br><span class="small">' + p.n_jalan + ' mengerjakan</span>' : '') + '</td><td class="small">' + jad + '</td><td>' + (esc(p.kelas) || 'Semua') + '</td><td class="n">' + p.n_soal + warn + '</td><td class="n">' + p.n_selesai + '/' + p.n_peserta + '</td><td class="n">' + (p.rata == null ? '' : num(p.rata)) + '</td><td class="noprint" style="white-space:nowrap">' +
           '<button class="btn sm line" data-lihat="' + esc(p.pk) + '">Lihat</button> ' +
           (p.keadaan === 'buka' ? '<button class="btn sm warn" data-cmd="tutup" data-pk="' + esc(p.pk) + '">Tutup</button> ' : '<button class="btn sm" data-cmd="buka" data-pk="' + esc(p.pk) + '">Buka sekarang</button> ') +
           ((p.jadwal_buka || p.jadwal_tutup) && !(p.status === 'aktif' && p.kontrol === 'jadwal') ? '<button class="btn sm sec" data-cmd="jadwal" data-pk="' + esc(p.pk) + '">Ikuti jadwal</button> ' : '') +
@@ -583,7 +583,8 @@
       '<label>Jadwal buka (WIB)<input id="pf-buka" type="datetime-local" value="' + dtl(p && p.jadwal_buka) + '"></label>' +
       '<label>Jadwal tutup (WIB)<input id="pf-tutup" type="datetime-local" value="' + dtl(p && p.jadwal_tutup) + '"></label>' +
       '<label>Kelas peserta (kosong = semua)<input id="pf-kelas" placeholder="6A, 6B" value="' + esc(p ? p.kelas : '') + '"></label>' +
-      '<label>KKM paket (kosong = umum)<input id="pf-kkm" type="number" value="' + (p ? p.kkm_paket : '') + '"></label></div>' +
+      '<label>KKM paket (kosong = umum)<input id="pf-kkm" type="number" value="' + (p ? p.kkm_paket : '') + '"></label>' +
+      '<label>Urutan soal bagi siswa<select id="pf-acak"><option value="ya"' + (!p || p.acak_efektif === 'ya' ? ' selected' : '') + '>Acak (tiap siswa berbeda)</option><option value="tidak"' + (p && p.acak_efektif === 'tidak' ? ' selected' : '') + '>Urut sesuai nomor soal</option></select></label></div>' +
       '<div style="height:10px"></div><button class="btn sm" id="pf-simpan">Simpan</button> <button class="btn sm line" id="pf-batal">Batal</button></div>';
     var f = $('#p-form'); f.innerHTML = h;
     function kodeOtomatis() { if (!baru) return; var m = $('#pf-mapel').value.split('|'), n = Math.max(1, +$('#pf-no').value || 1); $('#pf-kode').value = m[0] + '-P' + (n < 10 ? '0' : '') + n; $('#pf-nama').placeholder = 'Tryout TKA ' + m[1] + ' Paket ' + n; }
@@ -591,7 +592,7 @@
     $('#pf-batal').onclick = function () { f.innerHTML = ''; };
     $('#pf-simpan').onclick = function () {
       var mapel = baru ? $('#pf-mapel').value.split('|')[1] : $('#pf-mapel-t').value.trim(), kode = baru ? $('#pf-kode').value.trim() : p.pk;
-      var d = { kode: kode, mapel: mapel, nama: $('#pf-nama').value.trim() || $('#pf-nama').placeholder || kode, durasi_menit: +$('#pf-dur').value || 90, jadwal_buka: $('#pf-buka').value.replace('T', ' '), jadwal_tutup: $('#pf-tutup').value.replace('T', ' '), kelas: $('#pf-kelas').value.trim(), kkm: $('#pf-kkm').value };
+      var d = { kode: kode, mapel: mapel, nama: $('#pf-nama').value.trim() || $('#pf-nama').placeholder || kode, durasi_menit: +$('#pf-dur').value || 90, jadwal_buka: $('#pf-buka').value.replace('T', ' '), jadwal_tutup: $('#pf-tutup').value.replace('T', ' '), kelas: $('#pf-kelas').value.trim(), kkm: $('#pf-kkm').value, acak_soal: $('#pf-acak').value };
       api('guru_paket_simpan', { baru: baru, data: d }).then(function (r) { if (!r.ok) throw new Error(r.error); PK = r.pk; return muat(); }).then(function () { toast('Paket disimpan'); }).catch(function (e) { toast(e.message); });
     };
   }
