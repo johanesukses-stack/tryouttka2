@@ -227,6 +227,26 @@
     $('#x-next').textContent = S.idx >= n - 1 ? 'Daftar ▶' : 'Lanjut ▶';
     var rg = $('#x-ragu'), on = !!S.ragu[nomorSekarang()];
     rg.classList.toggle('on', on); rg.textContent = on ? '✓ Ragu-ragu' : 'Ragu-ragu';
+    renderSide();
+  }
+
+  /* Navigasi nomor soal di sisi kanan (tampil otomatis di laptop & HP landscape, lihat css/style.css) */
+  function renderSide() {
+    var side = $('#x-side'); if (!side) return;
+    var c = hitung(), cur = S.idx, y = side.scrollTop;
+    var g = S.order.map(function (qi, pos) {
+      var q = S.soal[qi], s = status(q);
+      return '<button data-p="' + pos + '" aria-label="Soal ' + (pos + 1) + '" class="' + (S.ragu[q.no] ? 'r' : s === 'done' ? 'a' : s === 'part' ? 'p' : '') + (pos === cur ? ' cur' : '') + '">' + (pos + 1) + '</button>';
+    }).join('');
+    side.innerHTML = '<h3>Navigasi Soal</h3>' +
+      '<div class="legend"><span class="a"><i></i>Terjawab</span><span class="p"><i></i>Sebagian</span><span class="r"><i></i>Ragu-ragu</span><span><i></i>Belum</span></div>' +
+      '<div class="grid">' + g + '</div>' +
+      '<p class="side-sum">Terjawab ' + c.done + ' · Sebagian ' + c.part + ' · Ragu-ragu ' + c.ragu + ' · Belum ' + c.none + '</p>' +
+      '<button class="btn" id="s-kumpul">Kumpulkan Jawaban</button>';
+    side.scrollTop = y;
+    $$('.grid button', side).forEach(function (b) { b.onclick = function () { S.idx = +b.dataset.p; cadangkan(); renderSoal(); }; });
+    $('#s-kumpul').onclick = konfirmasiKumpul;
+    var cb = $('.grid .cur', side); if (cb && cb.scrollIntoView) { try { cb.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
   }
 
   function renderSoal() {
